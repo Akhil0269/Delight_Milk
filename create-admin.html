@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Admin Account - Delight Milk</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin-bottom: 30px;
+            border-radius: 5px;
+        }
+        
+        .info-box h3 {
+            color: #1976D2;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+        
+        .info-box p {
+            color: #555;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        
+        .credentials {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        
+        .credentials p {
+            margin: 8px 0;
+            font-size: 14px;
+            color: #333;
+        }
+        
+        .credentials strong {
+            color: #667eea;
+        }
+        
+        button {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        .success {
+            background: #4CAF50;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            display: none;
+            text-align: center;
+        }
+        
+        .success.show {
+            display: block;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .link {
+            display: inline-block;
+            margin-top: 15px;
+            padding: 12px 24px;
+            background: white;
+            color: #667eea;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+        
+        .link:hover {
+            background: #f0f0f0;
+            transform: translateY(-2px);
+        }
+        
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 5px;
+        }
+        
+        .warning p {
+            color: #856404;
+            font-size: 14px;
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛡️ Create Admin Account</h1>
+        <p class="subtitle">One-click setup for Delight Milk Admin</p>
+        
+        <div class="info-box">
+            <h3>📋 What This Does</h3>
+            <p>This will create an admin account in your browser's localStorage so you can login to the admin panel.</p>
+        </div>
+        
+        <div class="credentials">
+            <p><strong>Email:</strong> yaswanthvenkata245@gmail.com</p>
+            <p><strong>Password:</strong> admin123</p>
+            <p><strong>Name:</strong> Admin User</p>
+        </div>
+        
+        <button onclick="createAdmin()">✨ Create Admin Account Now</button>
+        
+        <div class="success" id="successMessage">
+            <h3>✅ Admin Account Created!</h3>
+            <p>You can now login to the admin panel</p>
+            <a href="http://localhost:8080/admin-auth" class="link">Go to Admin Login →</a>
+        </div>
+        
+        <div class="warning">
+            <p><strong>⚠️ Important:</strong></p>
+            <p>• This only works in development mode</p>
+            <p>• Account is stored in your browser</p>
+            <p>• Use the credentials above to login</p>
+        </div>
+    </div>
+    
+    <script>
+        function createAdmin() {
+            // Create admin account in localStorage
+            const adminAccount = {
+                'yaswanthvenkata245@gmail.com': {
+                    id: 'dev_admin_' + Date.now(),
+                    email: 'yaswanthvenkata245@gmail.com',
+                    password: 'admin123',
+                    full_name: 'Admin User',
+                    created_at: new Date().toISOString(),
+                    role: 'admin'
+                }
+            };
+            
+            // Store in localStorage
+            localStorage.setItem('dev_admin_users', JSON.stringify(adminAccount));
+            
+            // Show success message
+            document.getElementById('successMessage').classList.add('show');
+            
+            // Log to console
+            console.log('✅ Admin account created successfully!');
+            console.log('Email: yaswanthvenkata245@gmail.com');
+            console.log('Password: admin123');
+            
+            // Change button text
+            const button = document.querySelector('button');
+            button.textContent = '✅ Account Created!';
+            button.style.background = '#4CAF50';
+            button.disabled = true;
+        }
+        
+        // Check if admin already exists
+        window.onload = function() {
+            const existingAdmins = localStorage.getItem('dev_admin_users');
+            if (existingAdmins) {
+                const admins = JSON.parse(existingAdmins);
+                if (admins['yaswanthvenkata245@gmail.com']) {
+                    document.getElementById('successMessage').classList.add('show');
+                    const button = document.querySelector('button');
+                    button.textContent = '✅ Account Already Exists';
+                    button.style.background = '#4CAF50';
+                    button.disabled = true;
+                }
+            }
+        };
+    </script>
+</body>
+</html>
