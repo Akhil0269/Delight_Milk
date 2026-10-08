@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, History, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Plus, History, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,6 +8,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useProductPrices, usePriceHistory } from '@/hooks/usePricing';
 import { addNewPrice, validatePriceChange, ProductPrice } from '@/utils/pricing';
+import { useAdminProducts } from '@/hooks/useAdmin';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import {
     Select,
@@ -20,8 +23,11 @@ import {
 const AdminPriceManagement = () => {
     const { prices } = useProductPrices();
     const { history } = usePriceHistory();
+    const { user } = useAuth();
+    const { data: dbProducts } = useAdminProducts();
 
     const [showAddForm, setShowAddForm] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [formData, setFormData] = useState({
         product_id: '',
         product_name: '',
@@ -31,15 +37,17 @@ const AdminPriceManagement = () => {
         notes: '',
     });
 
-    const products = [
-        { id: 'prod_buffalo_milk', name: 'Buffalo Milk' },
-        { id: 'prod_cow_milk', name: 'Cow Milk' },
-        { id: 'prod_curd', name: 'Curd' },
-        { id: 'prod_ghee', name: 'Ghee' },
-        { id: 'prod_paneer', name: 'Paneer' },
-        { id: 'prod_butter', name: 'Butter' },
-        { id: 'prod_cheese', name: 'Cheese' },
-    ];
+    const products = (dbProducts && dbProducts.length > 0)
+        ? dbProducts.map(p => ({ id: p.id, name: p.name }))
+        : [
+            { id: 'prod_buffalo_milk', name: 'Buffalo Milk' },
+            { id: 'prod_cow_milk', name: 'Cow Milk' },
+            { id: 'prod_curd', name: 'Curd' },
+            { id: 'prod_ghee', name: 'Ghee' },
+            { id: 'prod_paneer', name: 'Paneer' },
+            { id: 'prod_butter', name: 'Butter' },
+            { id: 'prod_cheese', name: 'Cheese' },
+        ];
 
     const handleProductChange = (productId: string) => {
         const product = products.find(p => p.id === productId);
@@ -50,7 +58,7 @@ const AdminPriceManagement = () => {
         });
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
         // Validate form
@@ -86,8 +94,74 @@ const AdminPriceManagement = () => {
             });
         }
 
-        // Add price
-        const result = addNewPrice(newPrice, 'Admin'); // In production, use actual admin name
+        const isDevMode = import.meta.env.VITE_DEV_MODE === 'true';
+
+        if (!isDevMode) {
+            try {
+                setIsSubmitting(true);
+                const oldPrice = prices.find(p => p.product_id === newPrice.product_id && p.is_active);
+
+                // Insert into Supabase product_prices
+                const { error: priceErr } = await supabase
+                    .from('product_prices')
+                    .insert({
+                        product_id: newPrice.product_id,
+                        regular_price: newPrice.regular_price,
+                        subscription_price: newPrice.subscription_price,
+                        effective_from: newPrice.effective_from,
+                        is_active: true,
+                        created_by: user?.id || null,
+                        notes: newPrice.notes || null,
+                    });
+
+                if (priceErr) {
+                    toast.error('Failed to update price in database', {
+                        description: priceErr.message
+                    });
+                    return;
+                }
+
+                // Insert audit record into price_history
+                await supabase
+                    .from('price_history')
+                    .insert({
+                        product_id: newPrice.product_id,
+                        product_name: newPrice.product_name,
+                        old_regular_price: oldPrice?.regular_price || null,
+                        new_regular_price: newPrice.regular_price,
+                        old_subscription_price: oldPrice?.subscription_price || null,
+                        new_subscription_price: newPrice.subscription_price,
+                        effective_from: newPrice.effective_from,
+                        changed_by: user?.id || null,
+                        changed_by_name: user?.email || 'Admin',
+                        reason: newPrice.notes || 'Price updated via Admin Price Management',
+                    });
+
+                toast.success('Price Updated!', {
+                    description: `New price for ${newPrice.product_name} will take effect on ${newPrice.effective_from}`
+                });
+
+                // Reset form
+                setFormData({
+                    product_id: '',
+                    product_name: '',
+                    regular_price: '',
+                    subscription_price: '',
+                    effective_from: '',
+                    notes: '',
+                });
+                setShowAddForm(false);
+            } catch (err: unknown) {
+                const message = err instanceof Error ? err.message : 'Failed to update price';
+                toast.error('Failed to save price', { description: message });
+            } finally {
+                setIsSubmitting(false);
+            }
+            return;
+        }
+
+        // Dev mode fallback
+        const result = addNewPrice(newPrice, user?.email || 'Admin');
 
         if (result.success) {
             toast.success('Price Updated!', {

@@ -14,15 +14,18 @@ import {
     useDeleteNotification,
     useClearAllNotifications,
     useNotificationSubscription,
+    Notification,
 } from "@/hooks/useNotifications";
 import { toast } from "sonner";
 
 const NotificationIcon = ({ type }: { type: string }) => {
-    const iconMap: Record<string, any> = {
+    const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
         order_placed: Package,
         order_delivered: Check,
+        subscription_created: Calendar,
         subscription_paused: Calendar,
         subscription_resumed: Calendar,
+        subscription_cancelled: Calendar,
         payment_success: CreditCard,
         payment_failed: AlertCircle,
         offer: Gift,
@@ -37,8 +40,10 @@ const NotificationIcon = ({ type }: { type: string }) => {
     const colorMap: Record<string, string> = {
         order_placed: "bg-blue-500",
         order_delivered: "bg-green-500",
+        subscription_created: "bg-blue-500",
         subscription_paused: "bg-yellow-500",
         subscription_resumed: "bg-green-500",
+        subscription_cancelled: "bg-gray-500",
         payment_success: "bg-green-500",
         payment_failed: "bg-red-500",
         offer: "bg-purple-500",
@@ -69,7 +74,7 @@ const NotificationsDropdown = () => {
     // Subscribe to real-time updates
     useNotificationSubscription();
 
-    const handleNotificationClick = (notification: any) => {
+    const handleNotificationClick = (notification: Notification) => {
         // Mark as read
         if (!notification.is_read) {
             markAsRead.mutate(notification.id);

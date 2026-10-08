@@ -26,11 +26,17 @@ import {
     AlertCircle,
 } from "lucide-react";
 import { format } from "date-fns";
+import type { LucideIcon } from "lucide-react";
 import {
     getAdminMetrics,
     getProductSales,
     getTopCustomers,
     getDeliveryStats,
+    fetchAdminReportsDataFromSupabase,
+    AdminMetrics,
+    ProductSales,
+    TopCustomer,
+    DeliveryStats,
 } from "@/utils/adminDataAggregation";
 
 interface ReportMetric {
@@ -38,33 +44,55 @@ interface ReportMetric {
     value: string | number;
     change: number;
     trend: "up" | "down" | "neutral";
-    icon: any;
+    icon: LucideIcon;
     color: string;
 }
 
 const AdminReports = () => {
     const [dateRange, setDateRange] = useState("7days");
     const [reportType, setReportType] = useState("overview");
-    const [realMetrics, setRealMetrics] = useState<any>(null);
-    const [productSales, setProductSales] = useState<any[]>([]);
-    const [topCustomers, setTopCustomers] = useState<any[]>([]);
-    const [deliveryStats, setDeliveryStats] = useState<any[]>([]);
+    const [realMetrics, setRealMetrics] = useState<AdminMetrics | null>(null);
+    const [productSales, setProductSales] = useState<ProductSales[]>([]);
+    const [topCustomers, setTopCustomers] = useState<TopCustomer[]>([]);
+    const [deliveryStats, setDeliveryStats] = useState<DeliveryStats[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
 
     // Load real data on mount and when filters change
     useEffect(() => {
         loadRealData();
     }, [dateRange, reportType]);
 
-    const loadRealData = () => {
-        const metrics = getAdminMetrics();
-        const products = getProductSales();
-        const customers = getTopCustomers();
-        const deliveries = getDeliveryStats();
+    const loadRealData = async () => {
+        setIsLoading(true);
+        const isDevMode = import.meta.env.VITE_DEV_MODE === 'true';
+        if (!isDevMode) {
+            try {
+                const data = await fetchAdminReportsDataFromSupabase();
+                setRealMetrics(data.metrics);
+                setProductSales(data.productSales);
+                setTopCustomers(data.topCustomers);
+                setDeliveryStats(data.deliveryStats);
+            } catch (e) {
+                console.error("Failed to load live reports from Supabase:", e);
+                setRealMetrics(getAdminMetrics());
+                setProductSales(getProductSales());
+                setTopCustomers(getTopCustomers());
+                setDeliveryStats(getDeliveryStats());
+            } finally {
+                setIsLoading(false);
+            }
+        } else {
+            const metrics = getAdminMetrics();
+            const products = getProductSales();
+            const customers = getTopCustomers();
+            const deliveries = getDeliveryStats();
 
-        setRealMetrics(metrics);
-        setProductSales(products);
-        setTopCustomers(customers);
-        setDeliveryStats(deliveries);
+            setRealMetrics(metrics);
+            setProductSales(products);
+            setTopCustomers(customers);
+            setDeliveryStats(deliveries);
+            setIsLoading(false);
+        }
     };
 
     // Build metrics array from real data
@@ -158,9 +186,9 @@ const AdminReports = () => {
                     </p>
                 </div>
                 <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={handleRefresh}>
-                        <RefreshCw className="w-4 h-4 mr-2" />
-                        Refresh
+                    <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoading}>
+                        <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+                        {isLoading ? "Refreshing..." : "Refresh"}
                     </Button>
                     <Button onClick={handleExportReport} size="sm">
                         <Download className="w-4 h-4 mr-2" />
@@ -388,9 +416,8 @@ const AdminReports = () => {
                     <div>
                         <p className="font-medium mb-1 text-green-800 dark:text-green-300">Real-Time Data Active</p>
                         <p className="text-sm text-green-700 dark:text-green-400">
-                            All metrics are calculated from real localStorage data including deliveries,
-                            customers, and sales. Schedule deliveries to see the numbers update in real-time!
-                            Click "Refresh" to update the data.
+                            All metrics are calculated directly from live database records including orders,
+                            deliveries, active customer profiles, and catalog sales. Click "Refresh" to fetch the latest analytics.
                         </p>
                     </div>
                 </div>

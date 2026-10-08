@@ -134,7 +134,6 @@ const UserProfileAvatar = ({ showName = false, size = 'md', className = '' }: Us
                     icon: Package,
                     label: 'Order History',
                     description: 'View past orders',
-                    badge: '12',
                     onClick: () => {
                         navigate('/orders');
                         setIsOpen(false);
@@ -143,9 +142,9 @@ const UserProfileAvatar = ({ showName = false, size = 'md', className = '' }: Us
                 {
                     icon: Calendar,
                     label: 'Subscriptions',
-                    description: 'Manage your subscriptions',
+                    description: 'Manage your daily deliveries',
                     onClick: () => {
-                        navigate('/dashboard');
+                        navigate('/settings/subscriptions');
                         setIsOpen(false);
                     },
                 },
@@ -168,14 +167,14 @@ const UserProfileAvatar = ({ showName = false, size = 'md', className = '' }: Us
                     label: 'Wallet & Payments',
                     description: 'Manage payment methods',
                     onClick: () => {
-                        navigate('/dashboard');
+                        navigate('/settings/payments');
                         setIsOpen(false);
                     },
                 },
                 {
                     icon: Settings,
                     label: 'Account Settings',
-                    description: 'Password, privacy & more',
+                    description: 'Password, security & preferences',
                     onClick: () => {
                         navigate('/settings');
                         setIsOpen(false);
@@ -184,18 +183,9 @@ const UserProfileAvatar = ({ showName = false, size = 'md', className = '' }: Us
                 {
                     icon: Bell,
                     label: 'Notifications',
-                    description: 'Manage preferences',
+                    description: 'Manage alerts & preferences',
                     onClick: () => {
                         navigate('/settings/notifications');
-                        setIsOpen(false);
-                    },
-                },
-                {
-                    icon: Shield,
-                    label: 'Privacy & Security',
-                    description: 'Control your data',
-                    onClick: () => {
-                        navigate('/settings/privacy');
                         setIsOpen(false);
                     },
                 },

@@ -4,17 +4,18 @@ import { Check, Clock, AlertCircle, Package } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useTodayDeliveries } from "@/hooks/useDeliveries";
+import { useAdminDeliveries } from "@/hooks/useAdmin";
 import MarkDeliveredDialog from "@/components/admin/MarkDeliveredDialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 
 const TodayDeliveries = () => {
-    const { data: deliveries, isLoading } = useTodayDeliveries();
-    const [selectedDelivery, setSelectedDelivery] = useState<any>(null);
+    const today = format(new Date(), "yyyy-MM-dd");
+    const { data: deliveries, isLoading } = useAdminDeliveries(today);
+    const [selectedDelivery, setSelectedDelivery] = useState<Record<string, unknown> | null>(null);
     const [showMarkDialog, setShowMarkDialog] = useState(false);
 
-    const handleMarkDelivered = (delivery: any) => {
+    const handleMarkDelivered = (delivery: Record<string, unknown>) => {
         setSelectedDelivery(delivery);
         setShowMarkDialog(true);
     };
@@ -35,8 +36,8 @@ const TodayDeliveries = () => {
         );
     }
 
-    const pendingDeliveries = deliveries?.filter(d => d.status === "upcoming") || [];
-    const completedToday = deliveries?.filter(d => d.status === "delivered") || [];
+    const pendingDeliveries = deliveries?.filter((d: { status?: string }) => d.status !== "delivered") || [];
+    const completedToday = deliveries?.filter((d: { status?: string }) => d.status === "delivered") || [];
 
     return (
         <>
@@ -83,9 +84,9 @@ const TodayDeliveries = () => {
                                 >
                                     <div className="flex items-start justify-between">
                                         <div className="flex-1">
-                                            <div className="flex items-center gap-2 mb-2">
+                                            <div className="flex items-center gap-2 mb-1">
                                                 <h4 className="font-semibold">
-                                                    {delivery.products?.name || "Product"}
+                                                    {delivery.products?.name || delivery.product?.product_name || "Product"}
                                                 </h4>
                                                 {delivery.status === "delivered" ? (
                                                     <Badge className="bg-green-600">
@@ -100,14 +101,21 @@ const TodayDeliveries = () => {
                                                 )}
                                             </div>
 
+                                            {delivery.user?.full_name && (
+                                                <p className="text-xs text-muted-foreground mb-2">
+                                                    Customer: <span className="font-medium text-foreground">{delivery.user.full_name}</span>
+                                                    {delivery.user.phone ? ` (${delivery.user.phone})` : ""}
+                                                </p>
+                                            )}
+
                                             <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
                                                 <div>
                                                     <span className="font-medium">Quantity:</span>{" "}
-                                                    {delivery.quantity}{delivery.products?.unit}
+                                                    {delivery.quantity} {delivery.products?.unit || delivery.product?.unit || ""}
                                                 </div>
                                                 <div>
                                                     <span className="font-medium">Amount:</span> ₹
-                                                    {(delivery.quantity * delivery.price_per_unit).toFixed(2)}
+                                                    {((delivery.quantity || 0) * (delivery.price_per_unit || 0)).toFixed(2)}
                                                 </div>
                                                 {delivery.delivery_time && (
                                                     <div className="col-span-2">
@@ -118,7 +126,7 @@ const TodayDeliveries = () => {
                                             </div>
                                         </div>
 
-                                        {delivery.status === "upcoming" && (
+                                        {delivery.status !== "delivered" && (
                                             <Button
                                                 onClick={() => handleMarkDelivered(delivery)}
                                                 size="sm"

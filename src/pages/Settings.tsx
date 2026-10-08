@@ -1,321 +1,401 @@
-import { motion } from 'framer-motion';
-import { Lock, Bell, Shield, Globe, Moon, Sun } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
-import { useState } from 'react';
+import { useState } from "react";
+import { motion } from "framer-motion";
+import {
+    User,
+    MapPin,
+    Calendar,
+    CreditCard,
+    Bell,
+    Globe,
+    Lock,
+    Shield,
+    LogOut,
+    ArrowLeft,
+    ChevronRight,
+    CheckCircle2,
+    AlertTriangle,
+    Loader2,
+    Eye,
+    EyeOff,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
+import { useProfile } from "@/hooks/useProfile";
+import { supabase } from "@/integrations/supabase/client";
+import DashboardNavbar from "@/components/dashboard/DashboardNavbar";
 
 const Settings = () => {
-    const [notifications, setNotifications] = useState({
-        email: true,
-        push: false,
-        sms: true,
-        orderUpdates: true,
-        promotions: false,
-    });
+    const navigate = useNavigate();
+    const { user, signOut } = useAuth();
+    const { data: profile } = useProfile();
 
-    const [privacy, setPrivacy] = useState({
-        profileVisible: true,
-        activityTracking: false,
-        dataSharing: false,
-    });
+    // Change Password Dialog State
+    const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+    const [newPassword, setNewPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
+    const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+
+    const handleChangePassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        if (!user) {
+            toast.error("You must be logged in to update your password");
+            return;
+        }
+
+        if (newPassword.length < 6) {
+            toast.error("Password must be at least 6 characters long");
+            return;
+        }
+
+        if (newPassword !== confirmPassword) {
+            toast.error("Passwords do not match");
+            return;
+        }
+
+        setIsUpdatingPassword(true);
+        try {
+            const { error } = await supabase.auth.updateUser({ password: newPassword });
+
+            if (error) {
+                toast.error(error.message || "Failed to update password");
+                return;
+            }
+
+            toast.success("Password updated successfully!");
+            setNewPassword("");
+            setConfirmPassword("");
+            setIsPasswordDialogOpen(false);
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : "Failed to update password";
+            toast.error(message);
+        } finally {
+            setIsUpdatingPassword(false);
+        }
+    };
+
+    const handleLogout = async () => {
+        try {
+            await signOut();
+            toast.success("Logged out successfully");
+            navigate("/auth");
+        } catch {
+            toast.error("Failed to log out");
+        }
+    };
+
+    const settingsSections = [
+        {
+            title: "Profile & Identity",
+            description: "Personal name, contact phone & email display",
+            icon: User,
+            color: "text-blue-500 bg-blue-500/10",
+            path: "/profile",
+            actionText: "View Profile",
+        },
+        {
+            title: "Delivery Addresses",
+            description: "Primary home address for daily 7:00 AM milk runs",
+            icon: MapPin,
+            color: "text-green-500 bg-green-500/10",
+            path: "/settings/address",
+            actionText: profile?.address ? "Manage" : "Add Address",
+        },
+        {
+            title: "Daily Subscriptions",
+            description: "Pause, resume, skip dates or adjust daily milk quantity",
+            icon: Calendar,
+            color: "text-purple-500 bg-purple-500/10",
+            path: "/settings/subscriptions",
+            actionText: "Manage Plans",
+        },
+        {
+            title: "Payment Methods",
+            description: "Delight Wallet prepaid balance, PhonePe & Cash on Delivery",
+            icon: CreditCard,
+            color: "text-amber-500 bg-amber-500/10",
+            path: "/settings/payments",
+            actionText: "Payment Modes",
+        },
+        {
+            title: "Notification Preferences",
+            description: "Control push alerts for orders, payments & morning deliveries",
+            icon: Bell,
+            color: "text-orange-500 bg-orange-500/10",
+            path: "/settings/notifications",
+            actionText: "Configure",
+        },
+        {
+            title: "Language & Regional",
+            description: "System interface language (English active, regional in dev)",
+            icon: Globe,
+            color: "text-cyan-500 bg-cyan-500/10",
+            path: "/settings/language",
+            actionText: "English",
+        },
+    ];
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
+        <div className="min-h-screen bg-muted/30">
+            <DashboardNavbar />
+
             {/* Header */}
-            <div className="bg-card border-b">
-                <div className="container mx-auto px-4 py-6">
-                    <h1 className="text-3xl font-bold">Account Settings</h1>
-                    <p className="text-muted-foreground mt-1">
-                        Manage your account preferences and security
-                    </p>
+            <div className="bg-card border-b sticky top-16 md:top-20 z-30">
+                <div className="container mx-auto px-4 py-4">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => navigate("/dashboard")}
+                            >
+                                <ArrowLeft className="w-5 h-5" />
+                            </Button>
+                            <div>
+                                <h1 className="text-2xl font-bold">Account Settings</h1>
+                                <p className="text-sm text-muted-foreground">
+                                    Manage your profile, preferences, and account security
+                                </p>
+                            </div>
+                        </div>
+
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleLogout}
+                            className="gap-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        >
+                            <LogOut className="w-4 h-4" />
+                            <span className="hidden sm:inline">Log Out</span>
+                        </Button>
+                    </div>
                 </div>
             </div>
 
-            {/* Content */}
-            <div className="container mx-auto px-4 py-8">
-                <div className="max-w-4xl mx-auto space-y-6">
-                    {/* Security Settings */}
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                    >
-                        <Card>
-                            <CardHeader>
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                                        <Lock className="w-5 h-5 text-primary" />
+            {/* Main Content */}
+            <div className="container mx-auto px-4 py-8 max-w-4xl space-y-6">
+                {/* Account Status Card */}
+                <motion.div
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                >
+                    <Card className="border shadow-sm">
+                        <CardContent className="p-6">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-2">
+                                        <h2 className="text-lg font-bold">
+                                            {profile?.full_name || user?.user_metadata?.full_name || "Valued Customer"}
+                                        </h2>
+                                        {profile?.is_blocked ? (
+                                            <Badge variant="destructive" className="flex items-center gap-1">
+                                                <AlertTriangle className="w-3 h-3" />
+                                                Account Suspended
+                                            </Badge>
+                                        ) : (
+                                            <Badge variant="secondary" className="flex items-center gap-1 bg-green-500/10 text-green-700 dark:text-green-400 border-green-200">
+                                                <CheckCircle2 className="w-3 h-3" />
+                                                Active Account
+                                            </Badge>
+                                        )}
                                     </div>
-                                    <div>
-                                        <CardTitle>Security</CardTitle>
-                                        <CardDescription>Password and authentication settings</CardDescription>
-                                    </div>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <div className="p-4 border rounded-lg">
-                                    <p className="font-medium mb-1">Password</p>
-                                    <p className="text-sm text-muted-foreground mb-3">
-                                        Last changed 30 days ago
+                                    <p className="text-xs text-muted-foreground">
+                                        Registered Email: <span className="font-medium text-foreground">{user?.email || "N/A"}</span>
                                     </p>
-                                    <button className="text-sm text-primary hover:underline">
+                                    {profile?.phone && (
+                                        <p className="text-xs text-muted-foreground">
+                                            Primary Mobile: <span className="font-medium text-foreground">{profile.phone}</span>
+                                        </p>
+                                    )}
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => navigate("/profile/edit")}
+                                    >
+                                        Edit Profile
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        onClick={() => setIsPasswordDialogOpen(true)}
+                                        className="gap-1.5"
+                                    >
+                                        <Lock className="w-3.5 h-3.5" />
                                         Change Password
-                                    </button>
+                                    </Button>
                                 </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </motion.div>
 
-                                <div className="p-4 border rounded-lg">
-                                    <p className="font-medium mb-1">Two-Factor Authentication</p>
-                                    <p className="text-sm text-muted-foreground mb-3">
-                                        Add an extra layer of security
-                                    </p>
-                                    <button className="text-sm text-primary hover:underline">
-                                        Enable 2FA
-                                    </button>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </motion.div>
-
-                    {/* Notification Settings */}
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.1 }}
-                    >
-                        <Card>
-                            <CardHeader>
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                                        <Bell className="w-5 h-5 text-primary" />
-                                    </div>
-                                    <div>
-                                        <CardTitle>Notifications</CardTitle>
-                                        <CardDescription>Manage how you receive updates</CardDescription>
-                                    </div>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex-1">
-                                        <Label htmlFor="email-notif">Email Notifications</Label>
-                                        <p className="text-sm text-muted-foreground">
-                                            Receive updates via email
-                                        </p>
-                                    </div>
-                                    <Switch
-                                        id="email-notif"
-                                        checked={notifications.email}
-                                        onCheckedChange={(checked) =>
-                                            setNotifications({ ...notifications, email: checked })
-                                        }
-                                    />
-                                </div>
-
-                                <Separator />
-
-                                <div className="flex items-center justify-between">
-                                    <div className="flex-1">
-                                        <Label htmlFor="push-notif">Push Notifications</Label>
-                                        <p className="text-sm text-muted-foreground">
-                                            Receive push notifications on your device
-                                        </p>
-                                    </div>
-                                    <Switch
-                                        id="push-notif"
-                                        checked={notifications.push}
-                                        onCheckedChange={(checked) =>
-                                            setNotifications({ ...notifications, push: checked })
-                                        }
-                                    />
-                                </div>
-
-                                <Separator />
-
-                                <div className="flex items-center justify-between">
-                                    <div className="flex-1">
-                                        <Label htmlFor="sms-notif">SMS Notifications</Label>
-                                        <p className="text-sm text-muted-foreground">
-                                            Receive text messages for important updates
-                                        </p>
-                                    </div>
-                                    <Switch
-                                        id="sms-notif"
-                                        checked={notifications.sms}
-                                        onCheckedChange={(checked) =>
-                                            setNotifications({ ...notifications, sms: checked })
-                                        }
-                                    />
-                                </div>
-
-                                <Separator />
-
-                                <div className="flex items-center justify-between">
-                                    <div className="flex-1">
-                                        <Label htmlFor="order-notif">Order Updates</Label>
-                                        <p className="text-sm text-muted-foreground">
-                                            Get notified about order status changes
-                                        </p>
-                                    </div>
-                                    <Switch
-                                        id="order-notif"
-                                        checked={notifications.orderUpdates}
-                                        onCheckedChange={(checked) =>
-                                            setNotifications({ ...notifications, orderUpdates: checked })
-                                        }
-                                    />
-                                </div>
-
-                                <Separator />
-
-                                <div className="flex items-center justify-between">
-                                    <div className="flex-1">
-                                        <Label htmlFor="promo-notif">Promotions & Offers</Label>
-                                        <p className="text-sm text-muted-foreground">
-                                            Receive special offers and discounts
-                                        </p>
-                                    </div>
-                                    <Switch
-                                        id="promo-notif"
-                                        checked={notifications.promotions}
-                                        onCheckedChange={(checked) =>
-                                            setNotifications({ ...notifications, promotions: checked })
-                                        }
-                                    />
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </motion.div>
-
-                    {/* Privacy Settings */}
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.2 }}
-                    >
-                        <Card>
-                            <CardHeader>
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                                        <Shield className="w-5 h-5 text-primary" />
-                                    </div>
-                                    <div>
-                                        <CardTitle>Privacy & Security</CardTitle>
-                                        <CardDescription>Control your data and privacy</CardDescription>
-                                    </div>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex-1">
-                                        <Label htmlFor="profile-visible">Profile Visibility</Label>
-                                        <p className="text-sm text-muted-foreground">
-                                            Make your profile visible to others
-                                        </p>
-                                    </div>
-                                    <Switch
-                                        id="profile-visible"
-                                        checked={privacy.profileVisible}
-                                        onCheckedChange={(checked) =>
-                                            setPrivacy({ ...privacy, profileVisible: checked })
-                                        }
-                                    />
-                                </div>
-
-                                <Separator />
-
-                                <div className="flex items-center justify-between">
-                                    <div className="flex-1">
-                                        <Label htmlFor="activity-tracking">Activity Tracking</Label>
-                                        <p className="text-sm text-muted-foreground">
-                                            Allow us to track your activity for better recommendations
-                                        </p>
-                                    </div>
-                                    <Switch
-                                        id="activity-tracking"
-                                        checked={privacy.activityTracking}
-                                        onCheckedChange={(checked) =>
-                                            setPrivacy({ ...privacy, activityTracking: checked })
-                                        }
-                                    />
-                                </div>
-
-                                <Separator />
-
-                                <div className="flex items-center justify-between">
-                                    <div className="flex-1">
-                                        <Label htmlFor="data-sharing">Data Sharing</Label>
-                                        <p className="text-sm text-muted-foreground">
-                                            Share anonymized data with partners
-                                        </p>
-                                    </div>
-                                    <Switch
-                                        id="data-sharing"
-                                        checked={privacy.dataSharing}
-                                        onCheckedChange={(checked) =>
-                                            setPrivacy({ ...privacy, dataSharing: checked })
-                                        }
-                                    />
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </motion.div>
-
-                    {/* Appearance */}
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.3 }}
-                    >
-                        <Card>
-                            <CardHeader>
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                                        <Globe className="w-5 h-5 text-primary" />
-                                    </div>
-                                    <div>
-                                        <CardTitle>Appearance</CardTitle>
-                                        <CardDescription>Customize your experience</CardDescription>
-                                    </div>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <div className="p-4 border rounded-lg">
-                                    <p className="font-medium mb-1">Theme</p>
-                                    <p className="text-sm text-muted-foreground mb-3">
-                                        Choose your preferred theme
-                                    </p>
-                                    <div className="flex gap-2">
-                                        <button className="px-4 py-2 border rounded-lg hover:bg-accent transition-colors flex items-center gap-2">
-                                            <Sun className="w-4 h-4" />
-                                            Light
-                                        </button>
-                                        <button className="px-4 py-2 border rounded-lg hover:bg-accent transition-colors flex items-center gap-2">
-                                            <Moon className="w-4 h-4" />
-                                            Dark
-                                        </button>
-                                        <button className="px-4 py-2 border rounded-lg hover:bg-accent transition-colors">
-                                            Auto
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div className="p-4 border rounded-lg">
-                                    <p className="font-medium mb-1">Language</p>
-                                    <p className="text-sm text-muted-foreground mb-3">
-                                        Select your preferred language
-                                    </p>
-                                    <select className="w-full px-3 py-2 border rounded-lg bg-background">
-                                        <option>English</option>
-                                        <option>Hindi</option>
-                                        <option>Spanish</option>
-                                    </select>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </motion.div>
+                {/* Settings Hub Cards Grid */}
+                <div className="space-y-3">
+                    <h3 className="text-base font-semibold">Preferences & Services</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {settingsSections.map((section, idx) => {
+                            const IconComponent = section.icon;
+                            return (
+                                <motion.div
+                                    key={section.path}
+                                    initial={{ opacity: 0, y: 15 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: idx * 0.04 }}
+                                >
+                                    <Card
+                                        className="hover:border-primary/50 hover:shadow-md transition-all cursor-pointer group h-full flex flex-col justify-between"
+                                        onClick={() => navigate(section.path)}
+                                    >
+                                        <CardContent className="p-5">
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="flex items-start gap-3">
+                                                    <div className={`p-2.5 rounded-xl ${section.color} shrink-0 mt-0.5`}>
+                                                        <IconComponent className="w-5 h-5" />
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="font-semibold text-sm group-hover:text-primary transition-colors">
+                                                            {section.title}
+                                                        </h4>
+                                                        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                                                            {section.description}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0 mt-1" />
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                </motion.div>
+                            );
+                        })}
+                    </div>
                 </div>
+
+                {/* Security, Privacy & Compliance Disclosures */}
+                <motion.div
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.25 }}
+                    className="space-y-4"
+                >
+                    <h3 className="text-base font-semibold">Security & Compliance</h3>
+                    <Card>
+                        <CardHeader className="pb-3">
+                            <div className="flex items-center gap-2">
+                                <Shield className="w-5 h-5 text-primary" />
+                                <CardTitle className="text-base">Authentication & Data Retention</CardTitle>
+                            </div>
+                            <CardDescription className="text-xs">
+                                Information regarding security credentials and account status
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-3 text-xs text-muted-foreground">
+                            <div className="p-3 bg-muted/40 rounded-lg border">
+                                <p className="font-semibold text-foreground mb-1">Two-Factor Authentication (2FA)</p>
+                                <p>
+                                    Two-Factor Authentication is managed securely through your authentication provider. Ensure your registered email address remains active for secure login verification.
+                                </p>
+                            </div>
+
+                            <div className="p-3 bg-muted/40 rounded-lg border">
+                                <p className="font-semibold text-foreground mb-1">Account Deletion & Data Privacy</p>
+                                <p>
+                                    Automated self-service account deletion is not implemented to prevent accidental loss of active subscriptions and delivery ledger history. If you wish to permanently close your account or request data erasure under data protection laws, please contact our support team at <span className="font-medium text-foreground">support@delightmilk.com</span>.
+                                </p>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </motion.div>
             </div>
+
+            {/* Change Password Dialog */}
+            <Dialog open={isPasswordDialogOpen} onOpenChange={setIsPasswordDialogOpen}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Lock className="w-5 h-5 text-primary" />
+                            Update Account Password
+                        </DialogTitle>
+                        <DialogDescription>
+                            Enter a new password for your Delight Milk customer account.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <form onSubmit={handleChangePassword} className="space-y-4 py-2">
+                        <div className="space-y-2">
+                            <Label htmlFor="new-password">New Password (minimum 6 characters)</Label>
+                            <div className="relative">
+                                <Input
+                                    id="new-password"
+                                    type={showPassword ? "text" : "password"}
+                                    value={newPassword}
+                                    onChange={(e) => setNewPassword(e.target.value)}
+                                    placeholder="Enter new password"
+                                    required
+                                    disabled={isUpdatingPassword}
+                                    className="pr-10"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                >
+                                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="confirm-password">Confirm New Password</Label>
+                            <Input
+                                id="confirm-password"
+                                type={showPassword ? "text" : "password"}
+                                value={confirmPassword}
+                                onChange={(e) => setConfirmPassword(e.target.value)}
+                                placeholder="Re-enter new password"
+                                required
+                                disabled={isUpdatingPassword}
+                            />
+                        </div>
+
+                        <DialogFooter className="pt-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setIsPasswordDialogOpen(false)}
+                                disabled={isUpdatingPassword}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                type="submit"
+                                disabled={isUpdatingPassword}
+                                className="gap-2"
+                            >
+                                {isUpdatingPassword && <Loader2 className="w-4 h-4 animate-spin" />}
+                                Update Password
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };

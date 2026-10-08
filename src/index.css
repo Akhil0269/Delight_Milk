@@ -6,28 +6,28 @@
 
 @layer base {
   :root {
-    --background: 45 30% 98%;
-    --foreground: 220 20% 15%;
+    --background: 48 33% 98%;
+    --foreground: 222 17% 15%;
 
     --card: 0 0% 100%;
-    --card-foreground: 220 20% 15%;
+    --card-foreground: 222 17% 15%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 220 20% 15%;
+    --popover-foreground: 222 17% 15%;
 
-    --primary: 217 91% 60%;
+    --primary: 217 82% 62%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 45 40% 94%;
-    --secondary-foreground: 220 20% 15%;
+    --secondary-foreground: 222 17% 15%;
 
     --muted: 45 20% 92%;
-    --muted-foreground: 220 10% 45%;
+    --muted-foreground: 222 9% 45%;
 
-    --accent: 142 70% 45%;
+    --accent: 126 45% 56%;
     --accent-foreground: 0 0% 100%;
 
-    --success: 142 70% 45%;
+    --success: 126 45% 56%;
     --success-foreground: 0 0% 100%;
 
     --warning: 38 92% 50%;
@@ -39,16 +39,16 @@
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 45 20% 88%;
-    --input: 45 20% 88%;
-    --ring: 217 91% 60%;
+    --border: 50 16% 88%;
+    --input: 50 16% 88%;
+    --ring: 217 82% 62%;
 
     --radius: 1rem;
 
     --cream: 45 50% 96%;
     --milk-white: 45 30% 99%;
-    --pastel-blue: 210 100% 95%;
-    --fresh-green: 142 70% 45%;
+    --pastel-blue: 218 67% 98%;
+    --fresh-green: 126 45% 56%;
     --soft-amber: 38 92% 50%;
 
     --sidebar-background: 0 0% 98%;
@@ -71,7 +71,7 @@
     --popover: 220 20% 13%;
     --popover-foreground: 45 30% 95%;
 
-    --primary: 217 91% 60%;
+    --primary: 217 82% 62%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 220 15% 20%;
@@ -80,10 +80,10 @@
     --muted: 220 15% 20%;
     --muted-foreground: 220 10% 55%;
 
-    --accent: 142 70% 45%;
+    --accent: 126 45% 56%;
     --accent-foreground: 0 0% 100%;
 
-    --success: 142 70% 45%;
+    --success: 126 45% 56%;
     --success-foreground: 0 0% 100%;
 
     --warning: 38 92% 50%;
@@ -97,7 +97,7 @@
 
     --border: 220 15% 20%;
     --input: 220 15% 20%;
-    --ring: 217 91% 60%;
+    --ring: 217 82% 62%;
 
     --cream: 220 15% 15%;
     --milk-white: 220 20% 12%;
@@ -180,3 +180,183 @@
     scrollbar-color: hsl(var(--primary) / 0.2) transparent;
   }
 }
+/* ==========================================================
+   KAFA MILK — PREMIUM DAIRY BRAND DESIGN SYSTEM
+   ========================================================== */
+
+:root {
+  --kafa-blue: #4F82EE;
+  --kafa-dark: #20242D;
+  --kafa-gray: #696F7D;
+  --kafa-green: #5DC069;
+  --kafa-white: #FFFFFF;
+  --kafa-bg: #FBFAF7;
+  --kafa-light-blue: #F6F9FE;
+  --kafa-border: #E6E4DB;
+}
+
+.font-editorial {
+  font-family: 'Playfair Display', Georgia, serif;
+}
+
+.kafa-page {
+  background-color: var(--kafa-bg);
+  color: var(--kafa-dark);
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Glass & Card styles */
+.kafa-card {
+  background-color: var(--kafa-white);
+  border: 1px solid var(--kafa-border);
+  border-radius: 1.25rem;
+  box-shadow: 0 4px 20px -2px rgba(32, 36, 45, 0.04);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.kafa-card:hover {
+  transform: translateY(-4px);
+  background-color: var(--kafa-light-blue);
+  border-color: rgba(79, 130, 238, 0.45);
+  box-shadow: 0 12px 30px -4px rgba(79, 130, 238, 0.1);
+}
+
+.kafa-btn-primary {
+  background-color: var(--kafa-blue);
+  color: #FFFFFF;
+  border-radius: 9999px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 14px rgba(79, 130, 238, 0.28);
+}
+
+.kafa-btn-primary:hover {
+  background-color: #3f72dc;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(79, 130, 238, 0.38);
+}
+
+.kafa-btn-secondary {
+  background-color: var(--kafa-white);
+  color: var(--kafa-dark);
+  border: 1px solid var(--kafa-border);
+  border-radius: 9999px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.25s ease;
+}
+
+.kafa-btn-secondary:hover {
+  background-color: var(--kafa-light-blue);
+  border-color: rgba(79, 130, 238, 0.3);
+}
+
+/* Benefit tag badge */
+.kafa-benefit-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 0.85rem;
+  background-color: rgba(255, 255, 255, 0.85);
+  border: 1px solid var(--kafa-border);
+  transition: all 0.2s ease;
+}
+
+.kafa-benefit-item:hover {
+  background-color: var(--kafa-white);
+  border-color: rgba(79, 130, 238, 0.35);
+  box-shadow: 0 4px 12px rgba(79, 130, 238, 0.08);
+}
+
+/* Subtle continuous animations */
+@keyframes kafaFloatSlow {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(0.8deg);
+  }
+}
+
+@keyframes kafaDropletOne {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+    opacity: 0.75;
+  }
+  50% {
+    transform: translateY(-14px) scale(1.08);
+    opacity: 1;
+  }
+}
+
+@keyframes kafaDropletTwo {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+    opacity: 0.65;
+  }
+  50% {
+    transform: translateY(-18px) scale(1.1);
+    opacity: 0.95;
+  }
+}
+
+@keyframes kafaAuraPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 0.85;
+  }
+}
+
+.animate-kafa-float {
+  animation: kafaFloatSlow 6s ease-in-out infinite;
+}
+
+.animate-kafa-drop-1 {
+  animation: kafaDropletOne 4.5s ease-in-out infinite;
+}
+
+.animate-kafa-drop-2 {
+  animation: kafaDropletTwo 5.5s ease-in-out infinite 0.8s;
+}
+
+.animate-kafa-aura {
+  animation: kafaAuraPulse 7s ease-in-out infinite;
+}
+
+/* Navigation backdrop */
+.kafa-nav-header {
+  background: rgba(251, 250, 247, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(230, 228, 219, 0.8);
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .animate-kafa-float,
+  .animate-kafa-drop-1,
+  .animate-kafa-drop-2,
+  .animate-kafa-aura,
+  .kafa-page *,
+  .kafa-page *::before,
+  .kafa-page *::after {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+

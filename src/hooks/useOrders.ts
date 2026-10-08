@@ -10,6 +10,32 @@ export type OrderStatus = "confirmed" | "scheduled" | "delivered" | "cancelled";
 export type OrderPaymentStatus = "pending" | "paid" | "refunded" | "failed";
 export type OrderPaymentMethod = "wallet" | "cod" | "phonepe";
 
+export interface OrderItem {
+  id: string;
+  order_id: string;
+  product_id: string;
+  quantity: number;
+  price_per_unit: number;
+  total_amount: number;
+  created_at?: string;
+  products?: {
+    id: string;
+    name: string;
+    unit: string;
+    image_url: string | null;
+  } | null;
+}
+
+export interface OrderDelivery {
+  id: string;
+  status: string;
+  delivery_date: string;
+  delivery_type?: string;
+  delivery_boy_id?: string | null;
+  delivery_partner_name?: string | null;
+  notes?: string | null;
+}
+
 export interface Order {
   id: string;
   user_id: string;
@@ -25,13 +51,15 @@ export interface Order {
   notes: string | null;
   created_at: string;
   updated_at: string;
-  // Joined
+  // Joined relations
   products?: {
     id: string;
     name: string;
     unit: string;
     image_url: string | null;
-  };
+  } | null;
+  order_items?: OrderItem[];
+  deliveries?: OrderDelivery | null;
 }
 
 export interface CreateOrderInput {
@@ -74,6 +102,30 @@ export function useOrders() {
             name,
             unit,
             image_url
+          ),
+          order_items (
+            id,
+            order_id,
+            product_id,
+            quantity,
+            price_per_unit,
+            total_amount,
+            created_at,
+            products (
+              id,
+              name,
+              unit,
+              image_url
+            )
+          ),
+          deliveries:delivery_id (
+            id,
+            status,
+            delivery_date,
+            delivery_type,
+            delivery_boy_id,
+            delivery_partner_name,
+            notes
           )
         `
         )
@@ -109,6 +161,30 @@ export function useOrder(orderId: string | null) {
             name,
             unit,
             image_url
+          ),
+          order_items (
+            id,
+            order_id,
+            product_id,
+            quantity,
+            price_per_unit,
+            total_amount,
+            created_at,
+            products (
+              id,
+              name,
+              unit,
+              image_url
+            )
+          ),
+          deliveries:delivery_id (
+            id,
+            status,
+            delivery_date,
+            delivery_type,
+            delivery_boy_id,
+            delivery_partner_name,
+            notes
           )
         `
         )
@@ -298,6 +374,7 @@ export function useCancelOrder() {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       queryClient.invalidateQueries({ queryKey: ["wallet"] });
       queryClient.invalidateQueries({ queryKey: ["wallet_transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["deliveries"] });
     },
   });
 }
@@ -308,21 +385,25 @@ export function useCancelOrder() {
 //
 // Replaces the old useRepeatOrder that INSERT'd directly into `deliveries`.
 // Now it creates an `orders` row for the target date using the same product,
-// quantity, and price_per_unit from the source order. Payment defaults to COD
-// (safest for a "repeat" without asking the customer to re-authorise payment).
+// quantity, and CURRENT canonical price from public.products (never historical).
+// Inactive or discontinued products are rejected with a clear customer error.
+// Includes idempotency protection against rapid repeated clicks.
 // ---------------------------------------------------------------------------
 
 export function useRepeatOrder() {
   const queryClient = useQueryClient();
-  const createOrder = useCreateOrder();
+  const { user } = useAuth();
 
   return useMutation<Order, Error, { orderId: string; targetDate: string }>({
     mutationFn: async ({ orderId, targetDate }) => {
-      // Fetch the source order (RLS ensures ownership)
+      if (!user?.id) throw new Error("Not authenticated");
+
+      // 1. Fetch the source order (RLS ensures ownership)
       const { data: source, error: fetchErr } = await supabase
         .from("orders")
-        .select("product_id, quantity, price_per_unit, status")
+        .select("id, product_id, quantity, price_per_unit, status")
         .eq("id", orderId)
+        .eq("user_id", user.id)
         .maybeSingle();
 
       if (fetchErr) throw fetchErr;
@@ -331,23 +412,87 @@ export function useRepeatOrder() {
         throw new Error("Can only repeat delivered orders");
       }
 
-      // Validate target date
+      // 2. Validate target date
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const requested = new Date(targetDate);
-      if (requested < today) throw new Error("Target date cannot be in the past");
+      if (requested < today) throw new Error("Delivery date cannot be in the past");
 
-      // Create new order via the canonical path (COD by default for repeats)
-      return createOrder.mutateAsync({
-        productId: source.product_id,
-        quantity: source.quantity,
-        deliveryDate: targetDate,
-        paymentMethod: "cod",
-      });
+      // 3. Validate product availability and fetch CURRENT canonical price
+      const { data: product, error: prodErr } = await supabase
+        .from("products")
+        .select("id, name, price_per_unit, is_active")
+        .eq("id", source.product_id)
+        .maybeSingle();
+
+      if (prodErr || !product) {
+        throw new Error("The product from this order is no longer available in the catalog.");
+      }
+
+      if (product.is_active === false) {
+        throw new Error(`"${product.name}" is currently unavailable or out of stock. Cannot repeat this order.`);
+      }
+
+      const currentPrice: number = Number(product.price_per_unit);
+      const quantity: number = Number(source.quantity);
+      const idempotencyKey = `repeat_${orderId}_${targetDate}`;
+
+      // 4. Repeat Idempotency Check: Prevent duplicate repeat creation on rapid clicks
+      const { data: existingRepeat } = await supabase
+        .from("orders")
+        .select(
+          `
+          *,
+          products (
+            id,
+            name,
+            unit,
+            image_url
+          )
+        `
+        )
+        .eq("user_id", user.id)
+        .ilike("notes", `%${idempotencyKey}%`)
+        .maybeSingle();
+
+      if (existingRepeat) {
+        return existingRepeat as Order;
+      }
+
+      // 5. Create new order with CURRENT canonical price (COD by default for safe repeat)
+      const { data: newOrder, error: insertErr } = await supabase
+        .from("orders")
+        .insert({
+          user_id: user.id,
+          product_id: source.product_id,
+          quantity,
+          price_per_unit: currentPrice, // strictly current price
+          delivery_date: targetDate,
+          payment_method: "cod",
+          payment_status: "pending",
+          status: "confirmed",
+          notes: `Repeat of order #${orderId.slice(0, 8)} (${idempotencyKey})`,
+        })
+        .select(
+          `
+          *,
+          products (
+            id,
+            name,
+            unit,
+            image_url
+          )
+        `
+        )
+        .single();
+
+      if (insertErr) throw insertErr;
+      return newOrder as Order;
     },
 
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["deliveries"] });
     },
   });
 }

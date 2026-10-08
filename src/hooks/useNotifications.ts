@@ -1,4 +1,5 @@
 // Notifications Hook
+import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -11,8 +12,11 @@ export interface Notification {
     message: string;
     is_read: boolean;
     is_deleted: boolean;
+    related_order_id?: string | null;
+    related_subscription_id?: string | null;
+    related_transaction_id?: string | null;
     action_url: string | null;
-    metadata: any;
+    metadata: Record<string, unknown>;
     created_at: string;
     read_at: string | null;
 }
@@ -26,16 +30,24 @@ export function useNotifications() {
         queryFn: async () => {
             if (!user) return [];
 
-            const { data, error } = await supabase
-                .from("notifications")
-                .select("*")
-                .eq("user_id", user.id)
-                .eq("is_deleted", false)
-                .order("created_at", { ascending: false })
-                .limit(50);
+            try {
+                const { data, error } = await supabase
+                    .from("notifications")
+                    .select("*")
+                    .eq("user_id", user.id)
+                    .eq("is_deleted", false)
+                    .order("created_at", { ascending: false })
+                    .limit(50);
 
-            if (error) throw error;
-            return data as Notification[];
+                if (error) {
+                    console.warn("Notifications fetch error:", error);
+                    return [];
+                }
+                return (data || []) as Notification[];
+            } catch (err) {
+                console.warn("Notifications query error:", err);
+                return [];
+            }
         },
         enabled: !!user,
     });
@@ -50,18 +62,22 @@ export function useUnreadCount() {
         queryFn: async () => {
             if (!user) return 0;
 
-            const { data, error } = await supabase
-                .from("notifications")
-                .select("id", { count: "exact", head: true })
-                .eq("user_id", user.id)
-                .eq("is_read", false)
-                .eq("is_deleted", false);
+            try {
+                const { count, error } = await supabase
+                    .from("notifications")
+                    .select("*", { count: "exact", head: true })
+                    .eq("user_id", user.id)
+                    .eq("is_read", false)
+                    .eq("is_deleted", false);
 
-            if (error) throw error;
-            return data || 0;
+                if (error) return 0;
+                return count || 0;
+            } catch (err) {
+                return 0;
+            }
         },
         enabled: !!user,
-        refetchInterval: 30000, // Refetch every 30 seconds for real-time updates
+        refetchInterval: 30000,
     });
 }
 
@@ -158,34 +174,33 @@ export function useClearAllNotifications() {
     });
 }
 
-// Subscribe to real-time notifications
+// Subscribe to real-time notifications with cleanup
 export function useNotificationSubscription() {
     const queryClient = useQueryClient();
     const { user } = useAuth();
 
-    useQuery({
-        queryKey: ["notifications", "subscription", user?.id],
-        queryFn: () => {
-            if (!user) return null;
+    useEffect(() => {
+        if (!user) return;
 
-            const channel = supabase
-                .channel("notifications")
-                .on(
-                    "postgres_changes",
-                    {
-                        event: "*",
-                        schema: "public",
-                        table: "notifications",
-                        filter: `user_id=eq.${user.id}`,
-                    },
-                    () => {
-                        queryClient.invalidateQueries({ queryKey: ["notifications"] });
-                    }
-                )
-                .subscribe();
+        const channelName = `customer_notifications_${user.id}`;
+        const channel = supabase
+            .channel(channelName)
+            .on(
+                "postgres_changes",
+                {
+                    event: "*",
+                    schema: "public",
+                    table: "notifications",
+                    filter: `user_id=eq.${user.id}`,
+                },
+                () => {
+                    queryClient.invalidateQueries({ queryKey: ["notifications"] });
+                }
+            )
+            .subscribe();
 
-            return channel;
-        },
-        enabled: !!user,
-    });
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [user, queryClient]);
 }

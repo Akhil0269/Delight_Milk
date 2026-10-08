@@ -33,7 +33,7 @@ const ReceiptsDialog = ({ open, onOpenChange }: ReceiptsDialogProps) => {
 
     const selectedReceipt = receipts?.find((r) => r.id === selectedReceiptId);
 
-    const handleDownloadMonthlyReceipt = (receipt: any) => {
+    const handleDownloadMonthlyReceipt = (receipt: { billing_month: string; total_amount?: number }) => {
         if (!allDeliveries || !user) return;
 
         // Filter deliveries for this month
@@ -53,35 +53,61 @@ const ReceiptsDialog = ({ open, onOpenChange }: ReceiptsDialogProps) => {
         let pendingAmount = 0;
 
         const deliveryData = monthDeliveries.map((delivery) => {
-            const total = delivery.price;
+            const d = delivery as typeof delivery & {
+                total_amount?: number;
+                price?: number;
+                product_name?: string;
+                payment_method?: string;
+            };
+            const unitPrice = Number(
+                d.price_per_unit ||
+                d.products?.price_per_unit ||
+                (d.price && d.quantity ? d.price / d.quantity : 0) ||
+                0
+            );
+            const quantity = Number(d.quantity || 1);
+            const total = Number(
+                d.total_amount ||
+                d.price ||
+                (unitPrice * quantity) ||
+                0
+            );
+            const productName = d.products?.name || d.product_name || 'Milk';
+            const paymentMethod = d.payment_method || 'prepaid';
+            const status = d.status || 'scheduled';
 
-            if (delivery.payment_method === 'phonepe' || delivery.payment_method === 'upi') {
+            if (paymentMethod === 'phonepe' || paymentMethod === 'upi') {
                 onlinePayments += total;
                 paidAmount += total;
-            } else if (delivery.payment_method === 'prepaid') {
+            } else if (paymentMethod === 'prepaid') {
                 walletPayments += total;
                 paidAmount += total;
-            } else if (delivery.payment_method === 'cod') {
+            } else if (paymentMethod === 'cod') {
                 codPayments += total;
-                if (delivery.status === 'delivered') {
+                if (status === 'delivered') {
                     paidAmount += total;
                 } else {
                     pendingAmount += total;
                 }
+            } else {
+                walletPayments += total;
+                paidAmount += total;
             }
 
             return {
                 date: delivery.delivery_date,
-                productName: delivery.product_name || 'Milk',
-                quantity: delivery.quantity,
-                pricePerUnit: delivery.price / delivery.quantity,
-                total: total,
-                paymentMethod: delivery.payment_method === 'phonepe' ? 'UPI' :
-                    delivery.payment_method === 'prepaid' ? 'Prepaid' : 'COD',
-                status: delivery.status === 'delivered' ? 'Delivered' :
-                    delivery.status === 'scheduled' ? 'Scheduled' : 'Pending',
+                productName,
+                quantity,
+                pricePerUnit: unitPrice,
+                total,
+                paymentMethod: paymentMethod === 'phonepe' || paymentMethod === 'upi' ? 'PhonePe' :
+                    paymentMethod === 'prepaid' ? 'Prepaid' : 'COD',
+                status: status === 'delivered' ? 'Delivered' :
+                    status === 'scheduled' ? 'Scheduled' : 'Pending',
             };
         });
+
+        const totalAmount = Number(receipt.total_amount || paidAmount + pendingAmount || 0);
 
         const monthlyData: MonthlyReceiptData = {
             month: format(new Date(receipt.billing_month), "MMMM yyyy"),
@@ -90,7 +116,7 @@ const ReceiptsDialog = ({ open, onOpenChange }: ReceiptsDialogProps) => {
             deliveries: deliveryData,
             summary: {
                 totalDeliveries: monthDeliveries.length,
-                totalAmount: receipt.total_amount,
+                totalAmount,
                 paidAmount,
                 pendingAmount,
                 onlinePayments,

@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Bell, ArrowLeft, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -67,11 +68,11 @@ const NotificationPreferencesPage = () => {
     );
 
     // Update preferences when fetched
-    useState(() => {
+    useEffect(() => {
         if (preferences) {
             setLocalPreferences(preferences);
         }
-    });
+    }, [preferences]);
 
     // Save preferences mutation
     const saveMutation = useMutation({
@@ -80,11 +81,14 @@ const NotificationPreferencesPage = () => {
 
             const { error } = await supabase
                 .from("user_preferences")
-                .upsert({
-                    user_id: user.id,
-                    notification_preferences: prefs,
-                    updated_at: new Date().toISOString(),
-                });
+                .upsert(
+                    {
+                        user_id: user.id,
+                        notification_preferences: prefs,
+                        updated_at: new Date().toISOString(),
+                    },
+                    { onConflict: 'user_id' }
+                );
 
             if (error) throw error;
         },
@@ -113,26 +117,36 @@ const NotificationPreferencesPage = () => {
             key: "order_notifications" as keyof NotificationPreferences,
             title: "Order Notifications",
             description: "Get notified when orders are placed or updated",
+            badge: "Backend Trigger",
+            badgeColor: "bg-green-600/10 text-green-700 dark:text-green-400 border-green-200",
         },
         {
             key: "delivery_notifications" as keyof NotificationPreferences,
             title: "Delivery Notifications",
-            description: "Receive updates about your deliveries",
+            description: "Receive updates about your 7:00 AM deliveries",
+            badge: "Backend Trigger",
+            badgeColor: "bg-green-600/10 text-green-700 dark:text-green-400 border-green-200",
         },
         {
             key: "payment_notifications" as keyof NotificationPreferences,
             title: "Payment Notifications",
-            description: "Alerts for successful payments and failures",
+            description: "Alerts for successful payments, PhonePe receipts & refunds",
+            badge: "Backend Trigger",
+            badgeColor: "bg-green-600/10 text-green-700 dark:text-green-400 border-green-200",
         },
         {
             key: "subscription_notifications" as keyof NotificationPreferences,
             title: "Subscription Notifications",
-            description: "Updates about your subscriptions",
+            description: "Updates about daily plan activations, pauses, resumes & skips",
+            badge: "Backend Trigger",
+            badgeColor: "bg-green-600/10 text-green-700 dark:text-green-400 border-green-200",
         },
         {
             key: "promotional_notifications" as keyof NotificationPreferences,
             title: "Promotional Offers",
-            description: "Receive offers, discounts, and special deals",
+            description: "Receive seasonal dairy offers, discounts, and fresh announcements",
+            badge: "In-App",
+            badgeColor: "bg-primary/10 text-primary border-primary/20",
         },
     ];
 
@@ -140,12 +154,16 @@ const NotificationPreferencesPage = () => {
         {
             key: "email_notifications" as keyof NotificationPreferences,
             title: "Email Notifications",
-            description: "Receive notifications via email",
+            description: "Saved in user preferences (external mail dispatch in development)",
+            badge: "Preference Saved",
+            badgeColor: "bg-muted text-muted-foreground border-muted-foreground/30",
         },
         {
             key: "sms_notifications" as keyof NotificationPreferences,
             title: "SMS Notifications",
-            description: "Receive notifications via SMS",
+            description: "Saved in user preferences (SMS gateway integration in development)",
+            badge: "Preference Saved",
+            badgeColor: "bg-muted text-muted-foreground border-muted-foreground/30",
         },
     ];
 
@@ -189,7 +207,7 @@ const NotificationPreferencesPage = () => {
                                 Notification Types
                             </CardTitle>
                             <CardDescription>
-                                Choose which notifications you want to receive
+                                Active database triggers enforce these preferences on orders, deliveries, payments, and subscriptions
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
@@ -198,10 +216,15 @@ const NotificationPreferencesPage = () => {
                                     key={setting.key}
                                     className="flex items-center justify-between p-4 rounded-lg border"
                                 >
-                                    <div className="flex-1">
-                                        <Label htmlFor={setting.key} className="font-medium cursor-pointer">
-                                            {setting.title}
-                                        </Label>
+                                    <div className="flex-1 pr-3">
+                                        <div className="flex items-center gap-2">
+                                            <Label htmlFor={setting.key} className="font-medium cursor-pointer">
+                                                {setting.title}
+                                            </Label>
+                                            <Badge variant="outline" className={`text-[10px] py-0 px-1.5 ${setting.badgeColor}`}>
+                                                {setting.badge}
+                                            </Badge>
+                                        </div>
                                         <p className="text-sm text-muted-foreground mt-1">
                                             {setting.description}
                                         </p>
@@ -219,9 +242,9 @@ const NotificationPreferencesPage = () => {
                     {/* Notification Channels */}
                     <Card>
                         <CardHeader>
-                            <CardTitle>Notification Channels</CardTitle>
+                            <CardTitle>Delivery Channels</CardTitle>
                             <CardDescription>
-                                Choose how you want to receive notifications
+                                Channel settings saved to public.user_preferences (In-app realtime delivery active; external SMS/Email gateways in rollout)
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
@@ -230,10 +253,15 @@ const NotificationPreferencesPage = () => {
                                     key={setting.key}
                                     className="flex items-center justify-between p-4 rounded-lg border"
                                 >
-                                    <div className="flex-1">
-                                        <Label htmlFor={setting.key} className="font-medium cursor-pointer">
-                                            {setting.title}
-                                        </Label>
+                                    <div className="flex-1 pr-3">
+                                        <div className="flex items-center gap-2">
+                                            <Label htmlFor={setting.key} className="font-medium cursor-pointer">
+                                                {setting.title}
+                                            </Label>
+                                            <Badge variant="outline" className={`text-[10px] py-0 px-1.5 ${setting.badgeColor}`}>
+                                                {setting.badge}
+                                            </Badge>
+                                        </div>
                                         <p className="text-sm text-muted-foreground mt-1">
                                             {setting.description}
                                         </p>

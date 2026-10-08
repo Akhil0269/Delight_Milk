@@ -200,17 +200,19 @@ const ModernSearchOverlay = ({ isOpen, onClose }: ModernSearchOverlayProps) => {
                                                         onClick={() => handleProductSelect(product.id, product.name)}
                                                         className="w-full flex items-center gap-4 p-4 rounded-xl hover:bg-muted/50 transition-all group text-left"
                                                     >
-                                                        {product.image_url ? (
-                                                            <img
-                                                                src={product.image_url}
-                                                                alt={product.name}
-                                                                className="w-16 h-16 rounded-lg object-cover ring-2 ring-border group-hover:ring-primary transition-all"
-                                                            />
-                                                        ) : (
-                                                            <div className="w-16 h-16 rounded-lg bg-primary/10 flex items-center justify-center ring-2 ring-border group-hover:ring-primary transition-all">
-                                                                <Milk className="w-8 h-8 text-primary" />
-                                                            </div>
-                                                        )}
+                                                        <div className="w-16 h-16 rounded-lg bg-primary/10 flex items-center justify-center ring-2 ring-border group-hover:ring-primary transition-all flex-shrink-0 relative overflow-hidden">
+                                                            {product.image_url ? (
+                                                                <img
+                                                                    src={product.image_url}
+                                                                    alt={product.name}
+                                                                    className="w-full h-full object-cover"
+                                                                    onError={(e) => {
+                                                                        (e.currentTarget as HTMLElement).style.display = 'none';
+                                                                    }}
+                                                                />
+                                                            ) : null}
+                                                            <Milk className="w-8 h-8 text-primary absolute -z-10" />
+                                                        </div>
                                                         <div className="flex-1 min-w-0">
                                                             <h4 className="font-semibold text-base mb-1 truncate group-hover:text-primary transition-colors">
                                                                 {product.name}

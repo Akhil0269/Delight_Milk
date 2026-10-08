@@ -32,26 +32,12 @@ const ReferralProgram = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
 
-    // Mock data - replace with actual API calls
-    const [referralCode] = useState("MILK2024XYZ");
-    const [referrals] = useState<Referral[]>([
-        {
-            id: "1",
-            name: "Amit Kumar",
-            phone: "98765xxxxx",
-            status: "completed",
-            reward: 50,
-            date: "2024-01-10",
-        },
-        {
-            id: "2",
-            name: "Priya Sharma",
-            phone: "98764xxxxx",
-            status: "pending",
-            reward: 50,
-            date: "2024-01-12",
-        },
-    ]);
+    // Real user referral code derived from user session
+    const referralCode = user?.id
+        ? `DM${user.id.replace(/[^a-zA-Z0-9]/g, "").slice(0, 6).toUpperCase()}`
+        : "DELIGHT50";
+
+    const [referrals] = useState<Referral[]>([]);
 
     const totalEarnings = referrals
         .filter(r => r.status === "completed")

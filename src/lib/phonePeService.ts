@@ -1,211 +1,126 @@
-// Mock PhonePe Payment Gateway Service
-// This simulates the PhonePe payment flow for testing
-// Replace with real PhonePe API integration when credentials are available
+// Real Server-Side PhonePe Payment Gateway Service
+// All signing, merchant credentials, and verification remain strictly server-side (Supabase Edge Functions).
+import { supabase } from "@/integrations/supabase/client";
 
 export interface PhonePePaymentRequest {
-    amount: number;
-    userId: string;
-    userName: string;
-    userEmail?: string;
-    userPhone?: string;
-    purpose: string; // 'delivery' or 'wallet_recharge'
-    deliveryId?: string;
+    purpose: 'cart_checkout' | 'cart_checkout_now' | 'wallet_topup' | 'wallet_recharge';
+    amount?: number;
+    items?: Array<{ id: string; quantity: number }>;
+    deliveryDate?: string;
+    redirectUrl?: string;
 }
 
 export interface PhonePePaymentResponse {
     success: boolean;
-    transactionId: string;
-    merchantTransactionId: string;
-    paymentUrl: string;
+    merchantTransactionId?: string;
+    paymentUrl?: string;
+    code?: string;
     message?: string;
+    amount?: number;
 }
 
-export interface PaymentStatus {
-    transactionId: string;
-    status: 'pending' | 'success' | 'failed';
-    amount: number;
-    paymentMethod?: string;
-    timestamp: string;
+export interface PaymentStatusResponse {
+    status: 'pending' | 'paid' | 'failed' | 'not_configured';
+    success: boolean;
+    merchantTransactionId?: string;
+    verifiedSource?: 'database' | 'phonepe_gateway';
+    message?: string;
+    notConfigured?: boolean;
 }
 
-class MockPhonePeService {
-    private baseUrl = '/payment'; // Mock payment page route
-
+class PhonePeService {
     /**
-     * Initiate a payment
-     * In production, this would call PhonePe API
+     * Initiate a payment via secure server-side Edge Function.
+     * The Edge Function calculates and validates the authoritative amount from public.products.
      */
     async initiatePayment(request: PhonePePaymentRequest): Promise<PhonePePaymentResponse> {
-        // Simulate API delay
-        await this.delay(500);
+        try {
+            const { data, error } = await supabase.functions.invoke('phonepe-initiate', {
+                body: {
+                    purpose: request.purpose,
+                    items: request.items,
+                    amount: request.amount,
+                    deliveryDate: request.deliveryDate,
+                    redirectUrl: request.redirectUrl || `${window.location.origin}/payment/success`,
+                },
+            });
 
-        // Generate unique transaction IDs
-        const transactionId = `TXN${Date.now()}${Math.random().toString(36).substr(2, 9)}`;
-        const merchantTransactionId = `MT${Date.now()}`;
+            if (error) {
+                return {
+                    success: false,
+                    code: 'INVOCATION_ERROR',
+                    message: error.message || 'Failed to connect to payment server.',
+                };
+            }
 
-        // In production, this would:
-        // 1. Create SHA256 signature
-        // 2. Call PhonePe /pay API
-        // 3. Return actual payment URL
-
-        // Mock response
-        const paymentUrl = `${this.baseUrl}/process?txnId=${transactionId}&amount=${request.amount}&purpose=${request.purpose}&deliveryId=${request.deliveryId || ''}`;
-
-        return {
-            success: true,
-            transactionId,
-            merchantTransactionId,
-            paymentUrl,
-            message: 'Payment initiated successfully'
-        };
-    }
-
-    /**
-     * Check payment status
-     * In production, this would call PhonePe /status API
-     */
-    async checkPaymentStatus(transactionId: string): Promise<PaymentStatus> {
-        // Simulate API delay
-        await this.delay(300);
-
-        // In production, this would:
-        // 1. Create SHA256 signature
-        // 2. Call PhonePe /status API
-        // 3. Verify response signature
-        // 4. Return actual status
-
-        // Mock: Check localStorage for simulated payment result
-        const storedStatus = localStorage.getItem(`payment_${transactionId}`);
-
-        if (storedStatus) {
-            return JSON.parse(storedStatus);
+            return data as PhonePePaymentResponse;
+        } catch (err: unknown) {
+            console.error('PhonePe initiate error:', err);
+            const msg = err instanceof Error ? err.message : 'Payment initiation failed';
+            return {
+                success: false,
+                code: 'NETWORK_ERROR',
+                message: msg,
+            };
         }
-
-        // Default pending status
-        return {
-            transactionId,
-            status: 'pending',
-            amount: 0,
-            timestamp: new Date().toISOString()
-        };
     }
 
     /**
-     * Simulate payment completion (for testing)
-     * In production, this would be handled by PhonePe webhook
+     * Check payment status authoritatively from server-side Edge Function.
+     * Checks database order payment_status first, then verifies with PhonePe API if still pending.
      */
-    simulatePaymentCompletion(
-        transactionId: string,
-        amount: number,
-        success: boolean,
-        paymentMethod: string = 'UPI'
-    ): void {
-        const status: PaymentStatus = {
-            transactionId,
-            status: success ? 'success' : 'failed',
-            amount,
-            paymentMethod,
-            timestamp: new Date().toISOString()
-        };
+    async checkPaymentStatus(transactionId: string): Promise<PaymentStatusResponse> {
+        try {
+            const { data, error } = await supabase.functions.invoke('phonepe-status', {
+                body: { txnId: transactionId },
+            });
 
-        localStorage.setItem(`payment_${transactionId}`, JSON.stringify(status));
+            if (error) {
+                // If Edge Function is unavailable or throws, check database directly via client RLS
+                const { data: dbOrders } = await supabase
+                    .from('orders')
+                    .select('payment_status, status')
+                    .ilike('notes', `%${transactionId}%`);
+
+                if (dbOrders && dbOrders.length > 0) {
+                    const isAllPaid = dbOrders.every(o => o.payment_status === 'paid');
+                    const isAnyFailed = dbOrders.some(o => o.payment_status === 'failed');
+
+                    if (isAllPaid) {
+                        return { status: 'paid', success: true, merchantTransactionId: transactionId, verifiedSource: 'database' };
+                    }
+                    if (isAnyFailed) {
+                        return { status: 'failed', success: false, merchantTransactionId: transactionId, verifiedSource: 'database' };
+                    }
+                }
+
+                return {
+                    status: 'pending',
+                    success: false,
+                    merchantTransactionId: transactionId,
+                    message: error.message,
+                };
+            }
+
+            return data as PaymentStatusResponse;
+        } catch (err: unknown) {
+            console.error('PhonePe check status error:', err);
+            return {
+                status: 'pending',
+                success: false,
+                merchantTransactionId: transactionId,
+                message: err instanceof Error ? err.message : 'Status check failed',
+            };
+        }
     }
 
     /**
-     * Clear payment data (cleanup)
-     */
-    clearPaymentData(transactionId: string): void {
-        localStorage.removeItem(`payment_${transactionId}`);
-    }
-
-    /**
-     * Utility: Delay function
-     */
-    private delay(ms: number): Promise<void> {
-        return new Promise(resolve => setTimeout(resolve, ms));
-    }
-
-    /**
-     * Get supported payment methods
+     * Get supported payment channels powered by PhonePe
      */
     getSupportedPaymentMethods(): string[] {
-        return [
-            'UPI',
-            'Credit Card',
-            'Debit Card',
-            'Net Banking',
-            'Wallets'
-        ];
+        return ['UPI', 'Credit Card', 'Debit Card', 'Net Banking'];
     }
 }
 
 // Export singleton instance
-export const phonePeService = new MockPhonePeService();
-
-// Production implementation would look like:
-/*
-class PhonePeService {
-  private merchantId: string;
-  private saltKey: string;
-  private saltIndex: string;
-  private baseUrl: string;
-
-  constructor() {
-    this.merchantId = import.meta.env.VITE_PHONEPE_MERCHANT_ID;
-    this.saltKey = import.meta.env.VITE_PHONEPE_SALT_KEY;
-    this.saltIndex = import.meta.env.VITE_PHONEPE_SALT_INDEX;
-    this.baseUrl = import.meta.env.VITE_PHONEPE_ENVIRONMENT === 'PRODUCTION'
-      ? 'https://api.phonepe.com/apis/hermes'
-      : 'https://api-preprod.phonepe.com/apis/pg-sandbox';
-  }
-
-  async initiatePayment(request: PhonePePaymentRequest): Promise<PhonePePaymentResponse> {
-    const payload = {
-      merchantId: this.merchantId,
-      merchantTransactionId: `MT${Date.now()}`,
-      merchantUserId: request.userId,
-      amount: request.amount * 100, // Convert to paise
-      redirectUrl: `${window.location.origin}/payment/callback`,
-      redirectMode: 'POST',
-      callbackUrl: `${window.location.origin}/api/phonepe-webhook`,
-      mobileNumber: request.userPhone,
-      paymentInstrument: {
-        type: 'PAY_PAGE'
-      }
-    };
-
-    const base64Payload = btoa(JSON.stringify(payload));
-    const signature = await this.generateSignature(base64Payload);
-
-    const response = await fetch(`${this.baseUrl}/pg/v1/pay`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-VERIFY': signature
-      },
-      body: JSON.stringify({
-        request: base64Payload
-      })
-    });
-
-    const data = await response.json();
-    return {
-      success: data.success,
-      transactionId: data.data.transactionId,
-      merchantTransactionId: payload.merchantTransactionId,
-      paymentUrl: data.data.instrumentResponse.redirectInfo.url,
-      message: data.message
-    };
-  }
-
-  private async generateSignature(payload: string): Promise<string> {
-    const stringToHash = payload + '/pg/v1/pay' + this.saltKey;
-    const encoder = new TextEncoder();
-    const data = encoder.encode(stringToHash);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    return `${hashHex}###${this.saltIndex}`;
-  }
-}
-*/
+export const phonePeService = new PhonePeService();

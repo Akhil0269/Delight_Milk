@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import {
@@ -26,6 +26,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 
+import { useAuth } from "@/contexts/AuthContext";
+import { useProfile } from "@/hooks/useProfile";
+
 interface Ticket {
     id: string;
     subject: string;
@@ -36,30 +39,28 @@ interface Ticket {
 
 const CustomerSupport = () => {
     const navigate = useNavigate();
+    const { user } = useAuth();
+    const { data: profile } = useProfile();
     const [activeTab, setActiveTab] = useState<"faq" | "contact" | "tickets">("faq");
     const [formData, setFormData] = useState({
-        name: "",
-        email: "",
+        name: profile?.full_name || "",
+        email: user?.email || "",
         subject: "",
         message: "",
     });
 
-    const [tickets] = useState<Ticket[]>([
-        {
-            id: "TKT001",
-            subject: "Delivery not received",
-            status: "resolved",
-            date: "2024-01-10",
-            category: "Delivery",
-        },
-        {
-            id: "TKT002",
-            subject: "Payment issue",
-            status: "in_progress",
-            date: "2024-01-12",
-            category: "Payment",
-        },
-    ]);
+    // Sync user details into form
+    useEffect(() => {
+        if (user || profile) {
+            setFormData(prev => ({
+                ...prev,
+                name: prev.name || profile?.full_name || "",
+                email: prev.email || user?.email || "",
+            }));
+        }
+    }, [user, profile]);
+
+    const [tickets] = useState<Ticket[]>([]);
 
     const faqs = [
         {

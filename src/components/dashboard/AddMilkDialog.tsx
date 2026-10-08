@@ -64,14 +64,20 @@ const AddMilkDialog = ({ open, onOpenChange }: AddMilkDialogProps) => {
             // Handle PhonePe payment
             if (paymentMethod === "phonepe") {
                 const response = await initiatePhonePePayment.mutateAsync({
-                    amount: totalAmount,
                     purpose: "delivery",
-                    userPhone: "9999999999", // You can add phone field to form
+                    deliveryDate,
+                    items: [{ id: selectedProduct, quantity }],
+                    amount: totalAmount,
                 });
 
-                if (response.success) {
-                    // Redirect to PhonePe payment page
+                if (response.success && response.paymentUrl) {
+                    onOpenChange(false);
+                    resetForm();
                     window.location.href = response.paymentUrl;
+                } else if (response.code === "PHONEPE_NOT_CONFIGURED") {
+                    toast.error("PhonePe online payment is currently not configured on the server. Please select Cash on Delivery or Wallet.");
+                } else {
+                    toast.error(response.message || "Failed to initiate PhonePe payment");
                 }
                 return;
             }

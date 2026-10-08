@@ -1,4 +1,3 @@
-// Admin Auth Page - Login only for authorized admin
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -8,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Shield, Mail, Lock } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 const AdminAuth = () => {
     const navigate = useNavigate();
@@ -16,149 +16,89 @@ const AdminAuth = () => {
         email: "",
         password: "",
     });
+    const { user, loading: authLoading, refreshSession } = useAuth();
 
-    // HARDCODED ADMIN CREDENTIALS
-    const AUTHORIZED_ADMIN_EMAIL = "yaswanthvenkata245@gmail.com";
-    const ADMIN_PASSWORD = "Yashu@524230";
-
-    // Pre-create admin account in localStorage on component mount
+    // If an authenticated admin visits /admin-auth, seamlessly direct them to /admin
     useEffect(() => {
-        const isDevMode = import.meta.env.VITE_DEV_MODE === 'true';
-
-        if (isDevMode) {
-            const storedAdmins = JSON.parse(localStorage.getItem('dev_admin_users') || '{}');
-            const userKey = AUTHORIZED_ADMIN_EMAIL.toLowerCase();
-
-            // Create admin account if it doesn't exist
-            if (!storedAdmins[userKey]) {
-                console.log("🔧 Pre-creating admin account...");
-
-                const adminAccount = {
-                    id: 'admin_001',
-                    email: AUTHORIZED_ADMIN_EMAIL,
-                    password: ADMIN_PASSWORD,
-                    full_name: 'Admin User',
-                    created_at: new Date().toISOString(),
-                    role: 'admin',
-                };
-
-                storedAdmins[userKey] = adminAccount;
-                localStorage.setItem('dev_admin_users', JSON.stringify(storedAdmins));
-                console.log("✅ Admin account pre-created successfully");
-            }
+        if (authLoading) return;
+        if (user) {
+            const checkExistingAdmin = async () => {
+                const { data: rpcAdmin } = await supabase.rpc("is_admin", { user_id: user.id });
+                if (rpcAdmin === true) {
+                    navigate("/admin", { replace: true });
+                }
+            };
+            checkExistingAdmin();
         }
-    }, []);
+    }, [user, authLoading, navigate]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
 
+        const emailToUse = formData.email.trim();
+
         try {
-            // Check if email is authorized for admin access
-            if (formData.email.toLowerCase() !== AUTHORIZED_ADMIN_EMAIL.toLowerCase()) {
-                toast.error("Access denied. You are not authorized to access the admin panel.");
-                setLoading(false);
-                return;
-            }
-
-            // ✅ CHECK DEVELOPMENT MODE FIRST
-            const isDevMode = import.meta.env.VITE_DEV_MODE === 'true';
-
-            if (isDevMode) {
-                console.log("🔧 Admin Development mode: Using localStorage");
-
-                // Simulate network delay
-                await new Promise(resolve => setTimeout(resolve, 1000));
-
-                // Development mode LOGIN
-                const storedAdmins = JSON.parse(localStorage.getItem('dev_admin_users') || '{}');
-                const userKey = formData.email.toLowerCase();
-
-                // Check if admin exists and password matches
-                if (storedAdmins[userKey] && storedAdmins[userKey].password === formData.password) {
-                    // Admin exists and password matches
-                    const devAdmin = {
-                        id: storedAdmins[userKey].id,
-                        email: formData.email,
-                        full_name: storedAdmins[userKey].full_name,
-                        created_at: storedAdmins[userKey].created_at,
-                        role: 'admin',
-                    };
-
-                    localStorage.setItem('dev_user', JSON.stringify(devAdmin));
-                    localStorage.setItem('dev_session', 'active');
-                    localStorage.setItem('dev_admin_session', 'active');
-
-                    toast.success("Welcome back, Admin!", {
-                        description: "Redirecting to admin panel..."
-                    });
-
-                    navigate("/admin");
-                } else {
-                    toast.error("Invalid password. Please try again.");
-                }
-
-                setLoading(false);
-                return;
-            }
-
-            // ✅ PRODUCTION MODE: Real Supabase authentication
+            // 1. Authenticate with Supabase
             const { data, error } = await supabase.auth.signInWithPassword({
-                email: formData.email,
+                email: emailToUse,
                 password: formData.password,
             });
 
             if (error) throw error;
 
-            // Double check email matches authorized admin
-            if (data.user.email?.toLowerCase() !== AUTHORIZED_ADMIN_EMAIL.toLowerCase()) {
+            if (!data.user) {
+                throw new Error("Authentication failed: No user session returned.");
+            }
+
+            // 2. Check if account is suspended/blocked
+            const { data: profileData } = await supabase
+                .from("profiles")
+                .select("is_blocked")
+                .eq("user_id", data.user.id)
+                .maybeSingle();
+
+            if (profileData?.is_blocked) {
                 await supabase.auth.signOut();
-                toast.error("Access denied. You are not authorized to access the admin panel.");
+                toast.error("Your account has been suspended or blocked.");
                 return;
             }
 
-            toast.success("Welcome back, Admin!");
-            navigate("/admin");
-        } catch (error: any) {
-            console.error("Admin auth error:", error);
+            // 3. Real admin role verification via Supabase RBAC
+            let isAdmin = false;
 
-            // ✅ FALLBACK: If Supabase fails, use development mode
-            if (error.message && (
-                error.message.includes("fetch") ||
-                error.message.includes("Failed to fetch") ||
-                error.message.includes("network") ||
-                error.message.includes("Invalid login credentials")
-            )) {
-                console.log("🔧 Supabase failed, falling back to admin development mode");
+            const { data: rpcAdmin, error: rpcError } = await supabase.rpc("is_admin", {
+                user_id: data.user.id,
+            });
 
-                // Check localStorage for admin
-                const storedAdmins = JSON.parse(localStorage.getItem('dev_admin_users') || '{}');
-                const userKey = formData.email.toLowerCase();
-
-                if (storedAdmins[userKey] && storedAdmins[userKey].password === formData.password) {
-                    const devAdmin = {
-                        id: storedAdmins[userKey].id,
-                        email: formData.email,
-                        full_name: storedAdmins[userKey].full_name,
-                        created_at: storedAdmins[userKey].created_at,
-                        role: 'admin',
-                    };
-
-                    localStorage.setItem('dev_user', JSON.stringify(devAdmin));
-                    localStorage.setItem('dev_session', 'active');
-                    localStorage.setItem('dev_admin_session', 'active');
-
-                    toast.warning("Admin logged in (Development Mode)", {
-                        description: "Supabase unavailable, using offline mode"
-                    });
-
-                    navigate("/admin");
-                } else {
-                    toast.error("Invalid email or password");
-                }
+            if (!rpcError && rpcAdmin === true) {
+                isAdmin = true;
             } else {
-                toast.error(error.message || "Authentication failed");
+                const { data: roleData, error: roleError } = await supabase
+                    .from("user_roles")
+                    .select("role")
+                    .eq("user_id", data.user.id)
+                    .eq("role", "admin")
+                    .maybeSingle();
+
+                if (!roleError && roleData?.role === "admin") {
+                    isAdmin = true;
+                }
             }
+
+            if (!isAdmin) {
+                await supabase.auth.signOut();
+                toast.error("Access denied. Your account does not have administrator privileges.");
+                return;
+            }
+
+            await refreshSession();
+            toast.success("Welcome back, Administrator!");
+            navigate("/admin", { replace: true });
+        } catch (error: unknown) {
+            console.error("Admin authentication error:", error);
+            const message = error instanceof Error ? error.message : "Invalid credentials or authentication failed.";
+            toast.error(message);
         } finally {
             setLoading(false);
         }
@@ -181,13 +121,13 @@ const AdminAuth = () => {
                 {/* Form */}
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                        <Label htmlFor="email">Email</Label>
+                        <Label htmlFor="email">Admin Email</Label>
                         <div className="relative mt-1">
                             <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                             <Input
                                 id="email"
                                 type="email"
-                                placeholder="admin@dailydrop.com"
+                                placeholder="admin@delightmilk.com"
                                 value={formData.email}
                                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                                 className="pl-10"
@@ -214,19 +154,9 @@ const AdminAuth = () => {
                     </div>
 
                     <Button type="submit" className="w-full" disabled={loading}>
-                        {loading ? "Signing in..." : "Sign In"}
+                        {loading ? "Signing in..." : "Sign In to Admin Portal"}
                     </Button>
                 </form>
-
-                {/* Info */}
-                <div className="mt-6 p-4 bg-blue-500/10 rounded-lg border border-blue-500/20">
-                    <p className="text-xs text-center text-muted-foreground">
-                        🔒 Admin access is restricted to authorized personnel only
-                    </p>
-                    <p className="text-xs text-center text-muted-foreground mt-1">
-                        Contact system administrator for access
-                    </p>
-                </div>
 
                 {/* Back to Home */}
                 <div className="mt-4 text-center">

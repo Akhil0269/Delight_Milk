@@ -6,17 +6,18 @@ import { Skeleton } from "@/components/ui/skeleton";
 const TodayStatus = () => {
   const { data: deliveries, isLoading } = useTodayDeliveries();
 
-  const deliveredItems = deliveries?.filter((d) => d.status === "delivered") || [];
-  const upcomingItems = deliveries?.filter((d) => d.status === "upcoming") || [];
-  const allDelivered = deliveries?.length ? deliveredItems.length === deliveries.length : false;
-  const hasDeliveries = deliveries && deliveries.length > 0;
+  const activeDeliveries = deliveries?.filter((d) => d.status !== "cancelled") || [];
+  const deliveredItems = activeDeliveries.filter((d) => d.status === "delivered");
+  const upcomingItems = activeDeliveries.filter((d) => d.status === "upcoming");
+  const allDelivered = activeDeliveries.length > 0 && deliveredItems.length === activeDeliveries.length;
+  const hasDeliveries = activeDeliveries.length > 0;
 
-  const totalAmount = deliveries?.reduce((sum, d) => {
+  const totalAmount = activeDeliveries.reduce((sum, d) => {
     if (d.status === "delivered") {
-      return sum + d.quantity * d.price_per_unit;
+      return sum + Number(d.quantity || 0) * Number(d.price_per_unit || 0);
     }
     return sum;
-  }, 0) || 0;
+  }, 0);
 
   if (isLoading) {
     return (
@@ -105,7 +106,7 @@ const TodayStatus = () => {
       <div className="p-6">
         <h4 className="font-semibold mb-3 text-muted-foreground">Today's Order</h4>
         <div className="space-y-3">
-          {deliveries?.map((delivery, index) => (
+          {activeDeliveries.map((delivery, index) => (
             <motion.div
               key={delivery.id}
               initial={{ opacity: 0, x: -20 }}
@@ -122,13 +123,13 @@ const TodayStatus = () => {
                 <div>
                   <div className="font-medium">{delivery.products?.name || "Product"}</div>
                   <div className="text-sm text-muted-foreground">
-                    {delivery.quantity} {delivery.products?.unit}
+                    {delivery.quantity} {delivery.products?.unit || ""}
                   </div>
                 </div>
               </div>
               <div className="text-right">
                 <div className="font-bold">
-                  ₹{(delivery.quantity * delivery.price_per_unit).toFixed(0)}
+                  ₹{(Number(delivery.quantity || 0) * Number(delivery.price_per_unit || 0)).toFixed(0)}
                 </div>
                 <div
                   className={`text-xs ${
@@ -139,7 +140,7 @@ const TodayStatus = () => {
                       : "text-muted-foreground"
                   }`}
                 >
-                  {delivery.status.charAt(0).toUpperCase() + delivery.status.slice(1)}
+                  {delivery.status ? delivery.status.charAt(0).toUpperCase() + delivery.status.slice(1) : "Scheduled"}
                 </div>
               </div>
             </motion.div>

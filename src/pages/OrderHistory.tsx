@@ -1,27 +1,34 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Package, Calendar, IndianRupee, Filter, Search, X } from "lucide-react";
+import { ArrowLeft, Package, Calendar, IndianRupee, Filter, Search, X, RotateCcw, Eye, AlertCircle, RefreshCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useOrders, useCancelOrder, type OrderStatus, type OrderPaymentStatus } from "@/hooks/useOrders";
-import { format } from "date-fns";
+import { useOrders, useCancelOrder, useRepeatOrder, type Order, type OrderStatus, type OrderPaymentStatus } from "@/hooks/useOrders";
+import { OrderDetailsDialog } from "@/components/dashboard/OrderDetailsDialog";
+import { format, addDays } from "date-fns";
 import { toast } from "sonner";
 
 const OrderHistory = () => {
     const navigate = useNavigate();
-    const { data: orders, isLoading } = useOrders();
+    const { data: orders, isLoading, isError, error, refetch } = useOrders();
     const cancelOrder = useCancelOrder();
+    const repeatOrder = useRepeatOrder();
     const [searchTerm, setSearchTerm] = useState("");
     const [filterStatus, setFilterStatus] = useState<string>("all");
+    const [repeatingOrderId, setRepeatingOrderId] = useState<string | null>(null);
+    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+    const [detailsOpen, setDetailsOpen] = useState(false);
 
-    // Filter and search logic
+    // Filter and search logic (supports header product and multi-item orders)
     const filteredOrders = orders?.filter((order) => {
         const productName = order.products?.name || "";
-        const matchesSearch = productName.toLowerCase().includes(searchTerm.toLowerCase());
+        const itemNames = order.order_items?.map(i => i.products?.name || "").join(" ") || "";
+        const combined = `${productName} ${itemNames}`.toLowerCase();
+        const matchesSearch = combined.includes(searchTerm.toLowerCase());
         const matchesStatus = filterStatus === "all" || order.status === filterStatus;
         return matchesSearch && matchesStatus;
     }) || [];
@@ -73,10 +80,38 @@ const OrderHistory = () => {
         try {
             await cancelOrder.mutateAsync(orderId);
             toast.success("Order cancelled successfully");
+            if (selectedOrder?.id === orderId) {
+                setDetailsOpen(false);
+            }
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : "Failed to cancel order";
             toast.error(message);
         }
+    };
+
+    const handleRepeatOrder = async (orderId: string, productName?: string) => {
+        try {
+            setRepeatingOrderId(orderId);
+            const tomorrow = format(addDays(new Date(), 1), "yyyy-MM-dd");
+            await repeatOrder.mutateAsync({
+                orderId,
+                targetDate: tomorrow,
+            });
+            toast.success(`Repeat order placed for ${productName || 'product'}! Delivery tomorrow via Cash on Delivery.`);
+            if (selectedOrder?.id === orderId) {
+                setDetailsOpen(false);
+            }
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : "Failed to repeat order";
+            toast.error(message);
+        } finally {
+            setRepeatingOrderId(null);
+        }
+    };
+
+    const handleOpenDetails = (order: Order) => {
+        setSelectedOrder(order);
+        setDetailsOpen(true);
     };
 
     return (
@@ -141,6 +176,18 @@ const OrderHistory = () => {
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
                         <p className="text-muted-foreground mt-4">Loading orders...</p>
                     </div>
+                ) : isError ? (
+                    <div className="text-center py-12 bg-card rounded-2xl border border-destructive/20 p-8 max-w-md mx-auto shadow-sm">
+                        <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-3" />
+                        <h3 className="text-lg font-bold">Failed to Load Orders</h3>
+                        <p className="text-sm text-muted-foreground mt-1 mb-4">
+                            {error?.message || "An error occurred while fetching your authoritative order history."}
+                        </p>
+                        <Button onClick={() => refetch()} variant="outline" className="gap-2">
+                            <RefreshCcw className="w-4 h-4" />
+                            Retry
+                        </Button>
+                    </div>
                 ) : filteredOrders.length === 0 ? (
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
@@ -166,20 +213,37 @@ const OrderHistory = () => {
                                 transition={{ delay: index * 0.05 }}
                             >
                                 <Card className="hover:shadow-lg transition-shadow">
-                                    <CardHeader className="pb-3">
+                                    <CardHeader className="pb-3 cursor-pointer" onClick={() => handleOpenDetails(order)}>
                                         <div className="flex items-start justify-between">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                                                    <Package className="w-6 h-6 text-primary" />
+                                                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                                                    {order.products?.image_url ? (
+                                                        <img
+                                                            src={order.products.image_url}
+                                                            alt={order.products?.name || "Product"}
+                                                            className="w-full h-full object-cover rounded-full"
+                                                        />
+                                                    ) : (
+                                                        <Package className="w-6 h-6 text-primary" />
+                                                    )}
                                                 </div>
                                                 <div>
-                                                    <CardTitle className="text-lg">{order.products?.name || "Product"}</CardTitle>
+                                                    <div className="flex items-center gap-2">
+                                                        <CardTitle className="text-lg hover:text-primary transition-colors">
+                                                            {order.products?.name || (order.order_items?.[0]?.products?.name) || "Product (Catalog Updated)"}
+                                                        </CardTitle>
+                                                        {order.order_items && order.order_items.length > 1 && (
+                                                            <Badge variant="secondary" className="text-[11px] font-normal">
+                                                                +{order.order_items.length - 1} more
+                                                            </Badge>
+                                                        )}
+                                                    </div>
                                                     <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
                                                         <Calendar className="w-4 h-4" />
                                                         <span>Delivery: {format(new Date(order.delivery_date), "dd MMM yyyy")}</span>
                                                     </div>
                                                     <div className="text-xs text-muted-foreground mt-0.5">
-                                                        Ordered: {format(new Date(order.created_at), "dd MMM yyyy, HH:mm")}
+                                                        Order #{order.id.slice(0, 8)} · Placed {format(new Date(order.created_at), "dd MMM yyyy, HH:mm")}
                                                     </div>
                                                 </div>
                                             </div>
@@ -189,8 +253,8 @@ const OrderHistory = () => {
                                         </div>
                                     </CardHeader>
                                     <CardContent>
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-4 text-sm">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+                                            <div className="flex flex-wrap items-center gap-4 text-sm">
                                                 <div>
                                                     <span className="text-muted-foreground">Qty:</span>
                                                     <span className="ml-1 font-medium">
@@ -200,34 +264,60 @@ const OrderHistory = () => {
                                                 <div className="flex items-center gap-1">
                                                     <IndianRupee className="w-4 h-4 text-muted-foreground" />
                                                     <span className="font-semibold text-lg">
-                                                        {(order.total_amount ?? order.quantity * order.price_per_unit).toFixed(2)}
+                                                        {(order.total_amount ?? (order.quantity * order.price_per_unit)).toFixed(2)}
                                                     </span>
                                                 </div>
                                                 <div className="text-xs">
                                                     <span className="text-muted-foreground">Payment: </span>
-                                                    <span>{formatPaymentMethod(order.payment_method)}</span>
+                                                    <span className="font-medium">{formatPaymentMethod(order.payment_method)}</span>
                                                     {" · "}
                                                     <span className={getPaymentStatusColor(order.payment_status)}>
                                                         {formatStatus(order.payment_status)}
                                                     </span>
                                                 </div>
                                             </div>
-                                            {order.status === "confirmed" && (
+                                            <div className="flex items-center gap-2 justify-end">
                                                 <Button
                                                     variant="outline"
                                                     size="sm"
-                                                    className="text-destructive border-destructive/40 hover:bg-destructive/10"
-                                                    disabled={cancelOrder.isPending}
-                                                    onClick={() => handleCancel(order.id)}
+                                                    className="text-xs"
+                                                    onClick={() => handleOpenDetails(order)}
                                                 >
-                                                    <X className="w-3 h-3 mr-1" />
-                                                    Cancel
+                                                    <Eye className="w-3.5 h-3.5 mr-1" />
+                                                    Details
                                                 </Button>
-                                            )}
+
+                                                {order.status === "confirmed" && (
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="text-destructive border-destructive/40 hover:bg-destructive/10 text-xs"
+                                                        disabled={cancelOrder.isPending}
+                                                        onClick={() => handleCancel(order.id)}
+                                                    >
+                                                        <X className="w-3 h-3 mr-1" />
+                                                        Cancel
+                                                    </Button>
+                                                )}
+
+                                                {order.status === "delivered" && (
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="text-primary border-primary/40 hover:bg-primary/10 text-xs"
+                                                        disabled={repeatingOrderId === order.id}
+                                                        onClick={() => handleRepeatOrder(order.id, order.products?.name)}
+                                                    >
+                                                        <RotateCcw className="w-3 h-3 mr-1" />
+                                                        {repeatingOrderId === order.id ? "Placing..." : "Repeat"}
+                                                    </Button>
+                                                )}
+                                            </div>
                                         </div>
+
                                         {order.delivery_id && (
                                             <p className="text-xs text-muted-foreground mt-2">
-                                                ✓ Delivery scheduled by admin
+                                                ✓ Delivery scheduled ({order.deliveries?.status || "upcoming"})
                                             </p>
                                         )}
                                         {!order.delivery_id && order.status === "confirmed" && (
@@ -277,6 +367,17 @@ const OrderHistory = () => {
                         </div>
                     </motion.div>
                 )}
+
+                {/* Order Details Dialog */}
+                <OrderDetailsDialog
+                    order={selectedOrder}
+                    open={detailsOpen}
+                    onOpenChange={setDetailsOpen}
+                    onCancelOrder={handleCancel}
+                    onRepeatOrder={handleRepeatOrder}
+                    isCancelling={cancelOrder.isPending}
+                    isRepeating={repeatingOrderId === selectedOrder?.id}
+                />
             </main>
         </div>
     );

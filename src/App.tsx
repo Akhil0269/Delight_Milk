@@ -27,12 +27,15 @@ import SearchPage from "./pages/SearchPage";
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
 import Favorites from "./pages/Favorites";
-import Footer from "./components/Footer";
+import CustomerLayout from "./layouts/CustomerLayout";
 
 import SubscriptionSettings from "./pages/settings/SubscriptionSettings";
 import PaymentMethods from "./pages/settings/PaymentMethods";
 import LanguageSettings from "./pages/settings/LanguageSettings";
 import NotificationPreferencesPage from "./pages/settings/NotificationPreferences";
+import ResetPassword from "./pages/ResetPassword";
+import EditProfile from "./pages/EditProfile";
+import ProductDetail from "./pages/ProductDetail";
 
 
 import AdminLayout from "./layouts/AdminLayout";
@@ -46,95 +49,167 @@ import AdminReports from "./pages/admin/AdminReports";
 import AdminPriceManagement from "./components/admin/AdminPriceManagement";
 import AdminAuth from "./pages/AdminAuth";
 import AdminNotifications from "./pages/admin/AdminNotifications";
+import AdminLogs from "./pages/admin/AdminLogs";
+import SubscriptionManagement from "./pages/admin/SubscriptionManagement";
+import OrderManagement from "./pages/admin/OrderManagement";
+import AdminManagement from "./pages/admin/AdminManagement";
+import DeliveryBoyManagement from "./pages/admin/DeliveryBoyManagement";
+import DeliveryBoyPortal from "./pages/delivery/DeliveryBoyPortal";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 const queryClient = new QueryClient();
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <CartProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
+  <ErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <CartProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
             <Routes>
-              <Route path="/" element={<Index />} />
+              {/* Auth Routes (Standalone, NO Customer Footer) */}
               <Route path="/auth" element={<Auth />} />
-              <Route
-                path="/dashboard"
-                element={
-                  <ProtectedRoute>
-                    <Dashboard />
-                  </ProtectedRoute>
-                }
-              />
-              <Route path="/payment/process" element={<PaymentProcess />} />
-              <Route path="/payment/success" element={<PaymentSuccess />} />
-              <Route path="/payment/failure" element={<PaymentFailure />} />
-              <Route path="/transactions" element={<TransactionHistory />} />
-              <Route path="/orders" element={<OrderHistory />} />
-              <Route path="/addresses" element={<AddressManagement />} />
-              <Route path="/referral" element={<ReferralProgram />} />
-              <Route path="/support" element={<CustomerSupport />} />
-
-              {/* Search Page */}
-              <Route path="/search" element={<SearchPage />} />
-
-              {/* Customer Products Catalog - Protected */}
-              <Route
-                path="/products"
-                element={
-                  <ProtectedRoute>
-                    <ProductsEnhanced />
-                  </ProtectedRoute>
-                }
-              />
-
-              {/* Profile Pages - Protected */}
-              <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-              <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-              <Route path="/favorites" element={<ProtectedRoute><Favorites /></ProtectedRoute>} />
-
-              {/* Settings Pages - Protected */}
-              <Route path="/settings/notifications" element={<ProtectedRoute><NotificationPreferencesPage /></ProtectedRoute>} />
-              <Route path="/settings/subscriptions" element={<ProtectedRoute><SubscriptionSettings /></ProtectedRoute>} />
-              <Route path="/settings/payments" element={<ProtectedRoute><PaymentMethods /></ProtectedRoute>} />
-              <Route path="/settings/language" element={<ProtectedRoute><LanguageSettings /></ProtectedRoute>} />
-
-              {/* Admin Auth Routes */}
+              <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/admin/auth" element={<AdminAuth />} />
               <Route path="/admin-auth" element={<AdminAuth />} />
 
-              {/* Admin Routes */}
+              {/* Admin Routes (Protected AdminLayout, NO Customer Footer) */}
               <Route
                 path="/admin"
-                element={
-                  <ProtectedRoute>
-                    <AdminLayout />
-                  </ProtectedRoute>
-                }
+                element={<AdminLayout />}
               >
                 <Route index element={<AdminDashboard />} />
+                <Route path="orders" element={<OrderManagement />} />
                 <Route path="users" element={<UserManagement />} />
                 <Route path="customer/:userId/calendar" element={<CustomerCalendar />} />
                 <Route path="products" element={<ProductManagement />} />
                 <Route path="prices" element={<AdminPriceManagement />} />
                 <Route path="deliveries" element={<DeliveryManagement />} />
+                <Route path="delivery-boys" element={<DeliveryBoyManagement />} />
+                <Route path="admins" element={<AdminManagement />} />
                 <Route path="wallet" element={<WalletManagement />} />
                 <Route path="reports" element={<AdminReports />} />
                 <Route path="notifications" element={<AdminNotifications />} />
-                <Route path="logs" element={<div className="p-8">Admin Logs - Coming Soon</div>} />
+                <Route path="subscriptions" element={<SubscriptionManagement />} />
+                <Route path="logs" element={<AdminLogs />} />
+                <Route path="settings" element={<AdminDashboard />} />
+                <Route path="*" element={<AdminDashboard />} />
               </Route>
 
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="*" element={<NotFound />} />
+              {/* Delivery Worker Standalone Route */}
+              <Route
+                path="/delivery"
+                element={
+                  <ProtectedRoute>
+                    <DeliveryBoyPortal />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Public & Customer Routes (CustomerLayout WITH Customer Footer) */}
+              <Route element={<CustomerLayout />}>
+                <Route path="/" element={<Index />} />
+                <Route
+                  path="/dashboard"
+                  element={
+                    <ProtectedRoute>
+                      <Dashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route path="/payment/process" element={<PaymentProcess />} />
+                <Route path="/payment/success" element={<PaymentSuccess />} />
+                <Route path="/payment/failure" element={<PaymentFailure />} />
+                <Route
+                  path="/transactions"
+                  element={
+                    <ProtectedRoute>
+                      <TransactionHistory />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/orders"
+                  element={
+                    <ProtectedRoute>
+                      <OrderHistory />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/addresses"
+                  element={
+                    <ProtectedRoute>
+                      <AddressManagement />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/settings/address"
+                  element={
+                    <ProtectedRoute>
+                      <AddressManagement />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/address"
+                  element={
+                    <ProtectedRoute>
+                      <AddressManagement />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route path="/referral" element={<ReferralProgram />} />
+                <Route path="/support" element={<CustomerSupport />} />
+
+                {/* Search Page */}
+                <Route path="/search" element={<SearchPage />} />
+
+                {/* Customer Products Catalog - Protected */}
+                <Route
+                  path="/products"
+                  element={
+                    <ProtectedRoute>
+                      <ProductsEnhanced />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/products/:id"
+                  element={
+                    <ProtectedRoute>
+                      <ProductDetail />
+                    </ProtectedRoute>
+                  }
+                />
+
+                {/* Profile Pages - Protected */}
+                <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+                <Route path="/profile/edit" element={<ProtectedRoute><EditProfile /></ProtectedRoute>} />
+                <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+                <Route path="/favorites" element={<ProtectedRoute><Favorites /></ProtectedRoute>} />
+
+                {/* Settings Pages - Protected */}
+                <Route path="/settings/notifications" element={<ProtectedRoute><NotificationPreferencesPage /></ProtectedRoute>} />
+                <Route path="/settings/subscriptions" element={<ProtectedRoute><SubscriptionSettings /></ProtectedRoute>} />
+                <Route path="/settings/payments" element={<ProtectedRoute><PaymentMethods /></ProtectedRoute>} />
+                <Route path="/settings/language" element={<ProtectedRoute><LanguageSettings /></ProtectedRoute>} />
+                <Route path="/settings/security" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+                <Route path="/settings/privacy" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+
+                {/* Catch-all 404 inside customer layout */}
+                <Route path="*" element={<NotFound />} />
+              </Route>
             </Routes>
-            <Footer />
           </BrowserRouter>
         </TooltipProvider>
       </CartProvider>
     </AuthProvider>
   </QueryClientProvider>
+</ErrorBoundary>
 );
 
 export default App;

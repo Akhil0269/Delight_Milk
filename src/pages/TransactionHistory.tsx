@@ -3,7 +3,7 @@ import { ArrowLeft, Download, Calendar, CreditCard, CheckCircle2, XCircle, Clock
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
-import { useWalletTransactions } from "@/hooks/useWallet";
+import { useWalletTransactions, WalletTransaction } from "@/hooks/useWallet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
@@ -16,16 +16,15 @@ const TransactionHistory = () => {
     const { user } = useAuth();
     const { data: transactions, isLoading } = useWalletTransactions(100); // Get last 100 transactions
 
-    const handleDownloadReceipt = (transaction: any) => {
+    const handleDownloadReceipt = (transaction: WalletTransaction) => {
         const receiptData: ReceiptData = {
             transactionId: transaction.reference_id || transaction.id,
             amount: Math.abs(transaction.amount),
-            paymentMethod: transaction.type === "credit" ? "UPI" : "Wallet",
+            paymentMethod: transaction.type === "credit" ? "PhonePe" : "Wallet",
             purpose: transaction.description || "Transaction",
             date: transaction.created_at,
             userName: user?.user_metadata?.full_name || user?.email || "Customer",
             userEmail: user?.email,
-            vendorUpiId: transaction.type === "debit" ? "9963450427@axl" : undefined,
         };
 
         downloadReceipt(receiptData);

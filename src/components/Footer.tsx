@@ -57,8 +57,18 @@ const Footer = () => {
   ];
 
   const cities = [
-    "Mumbai", "Delhi", "Bangalore", "Hyderabad",
-    "Chennai", "Pune", "Kolkata", "Ahmedabad"
+    "Palakollu",
+    "Medapadu",
+    "Kattukalava",
+    "Ullamparru",
+    "Adavipalem",
+    "Kontheru",
+    "Sangatrev",
+    "Poolapalli",
+    "Nagarajupeta",
+    "Chintalagaaruvu",
+    "Neerullipalem",
+    "Kombotlapalem"
   ];
 
   const socialLinks = [
@@ -70,35 +80,35 @@ const Footer = () => {
   ];
 
   return (
-    <footer className="bg-card border-t border-border mt-auto">
+    <footer className="bg-[#FBFAF7] border-t border-[#E6E4DB] mt-auto text-[#20242D]">
       {/* Main Footer Content */}
       <div className="container mx-auto px-4 py-12">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-8">
           {/* Brand Section */}
           <div className="lg:col-span-2">
             <Link to="/" className="flex items-center gap-2 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
-                <Milk className="w-6 h-6 text-primary-foreground" />
+              <div className="w-10 h-10 rounded-xl bg-[#4F82EE] flex items-center justify-center shadow-sm">
+                <Milk className="w-5 h-5 text-white" />
               </div>
-              <span className="text-xl font-bold">
-                Delight <span className="text-primary">Milk</span>
+              <span className="text-xl font-bold tracking-tight text-[#20242D]">
+                KAFA <span className="text-[#4F82EE]">MILK</span>
               </span>
             </Link>
-            <p className="text-sm text-muted-foreground mb-4 max-w-xs">
-              Fresh, pure, and delivered daily. Your trusted partner for quality dairy products.
+            <p className="text-sm text-[#696F7D] mb-4 max-w-xs leading-relaxed">
+              Fresh, pure, and delivered daily. Your trusted partner for farm-fresh dairy products.
             </p>
 
             {/* Contact Info */}
             <div className="space-y-2 mb-6">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Mail className="w-4 h-4" />
-                <a href="mailto:support@delightmilk.com" className="hover:text-primary transition-colors">
-                  support@delightmilk.com
+              <div className="flex items-center gap-2 text-sm text-[#696F7D]">
+                <Mail className="w-4 h-4 text-[#4F82EE]" />
+                <a href="mailto:support@kafamilk.com" className="hover:text-[#4F82EE] transition-colors">
+                  support@kafamilk.com
                 </a>
               </div>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Phone className="w-4 h-4" />
-                <a href="tel:+911234567890" className="hover:text-primary transition-colors">
+              <div className="flex items-center gap-2 text-sm text-[#696F7D]">
+                <Phone className="w-4 h-4 text-[#4F82EE]" />
+                <a href="tel:+911234567890" className="hover:text-[#4F82EE] transition-colors">
                   +91 123 456 7890
                 </a>
               </div>
@@ -302,8 +312,8 @@ const Footer = () => {
       <div className="border-t border-border bg-muted/30">
         <div className="container mx-auto px-4 py-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <p className="text-sm text-muted-foreground text-center md:text-left">
-              © {currentYear} Delight Milk. All rights reserved. Made with{" "}
+            <p className="text-sm text-[#696F7D] text-center md:text-left">
+              © {currentYear} KAFA MILK. All rights reserved. Made with{" "}
               <Heart className="w-3 h-3 inline text-red-500 fill-red-500" /> in India
             </p>
             <div className="flex items-center gap-4 text-sm text-muted-foreground">

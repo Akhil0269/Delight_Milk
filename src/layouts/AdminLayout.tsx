@@ -1,7 +1,9 @@
 // Admin Layout - Protected layout for admin pages
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Outlet, useNavigate, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import {
     LayoutDashboard,
     Users,
@@ -12,57 +14,128 @@ import {
     Bell,
     FileText,
     LogOut,
-    Menu
+    Menu,
+    Shield,
+    CalendarCheck,
+    ShoppingCart,
+    Bike,
+    ShieldCheck
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useUnreadCount } from "@/hooks/useNotifications";
 
 const AdminLayout = () => {
-    const { user, signOut } = useAuth();
+    const { user, loading: authLoading, signOut } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
     const [sidebarOpen, setSidebarOpen] = useState(true);
+    const [isVerifyingAdmin, setIsVerifyingAdmin] = useState(true);
+    const [isAdmin, setIsAdmin] = useState(false);
 
     useEffect(() => {
-        // Check if user is admin
+        let isMounted = true;
+
+        // If auth context is still loading session from storage/network, wait
+        if (authLoading) {
+            return;
+        }
+
         const checkAdminAccess = async () => {
             if (!user) {
-                navigate("/auth");
+                if (isMounted) {
+                    setIsAdmin(false);
+                    setIsVerifyingAdmin(false);
+                }
+                navigate("/admin-auth", { replace: true });
                 return;
             }
 
-            // TODO: Check if user has admin role
-            // For now, allow all authenticated users
-            // In production, check user.user_metadata.role === 'admin'
-        };
-
-        checkAdminAccess();
-    }, [user, navigate]);
-
-    const [unreadCount, setUnreadCount] = useState(0);
-
-    useEffect(() => {
-        const checkNotifications = () => {
             try {
-                const stored = JSON.parse(localStorage.getItem('dev_admin_notifications') || '[]');
-                const count = stored.filter((n: any) => !n.read).length;
-                setUnreadCount(count);
-            } catch (e) {
-                console.error("Error reading notifications", e);
+                // 1. Verify profile is not blocked
+                const { data: profileData } = await supabase
+                    .from("profiles")
+                    .select("is_blocked")
+                    .eq("user_id", user.id)
+                    .maybeSingle();
+
+                if (profileData?.is_blocked) {
+                    if (isMounted) {
+                        setIsAdmin(false);
+                        setIsVerifyingAdmin(false);
+                    }
+                    toast.error("Your account has been suspended or blocked.");
+                    await signOut();
+                    navigate("/admin-auth", { replace: true });
+                    return;
+                }
+
+                let userIsAdmin = false;
+
+                // 2. Verify via canonical is_admin database RPC function
+                const { data: rpcAdmin, error: rpcError } = await supabase.rpc("is_admin", {
+                    user_id: user.id,
+                });
+
+                if (!rpcError && rpcAdmin === true) {
+                    userIsAdmin = true;
+                } else {
+                    // 3. Direct user_roles table query fallback
+                    const { data: roleData, error: roleError } = await supabase
+                        .from("user_roles")
+                        .select("role")
+                        .eq("user_id", user.id)
+                        .eq("role", "admin")
+                        .maybeSingle();
+
+                    if (!roleError && roleData?.role === "admin") {
+                        userIsAdmin = true;
+                    }
+                }
+
+                if (!isMounted) return;
+
+                if (!userIsAdmin) {
+                    toast.error("Access denied. Administrator privileges required.");
+                    setIsAdmin(false);
+                    setIsVerifyingAdmin(false);
+                    navigate("/dashboard", { replace: true });
+                    return;
+                }
+
+                setIsAdmin(true);
+            } catch (error) {
+                console.error("Admin role verification error:", error);
+                if (isMounted) {
+                    setIsAdmin(false);
+                    toast.error("Failed to verify administrator privileges.");
+                    navigate("/dashboard", { replace: true });
+                }
+            } finally {
+                if (isMounted) {
+                    setIsVerifyingAdmin(false);
+                }
             }
         };
 
-        checkNotifications();
-        // Poll for new notifications
-        const interval = setInterval(checkNotifications, 2000);
-        return () => clearInterval(interval);
-    }, []);
+        checkAdminAccess();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [user, authLoading, navigate, signOut]);
+
+    const { data: dbUnreadCount = 0 } = useUnreadCount();
+    const unreadCount = Number(dbUnreadCount || 0);
 
     const menuItems = [
         { path: "/admin", icon: LayoutDashboard, label: "Dashboard" },
-        { path: "/admin/users", icon: Users, label: "Users" },
-        { path: "/admin/products", icon: Package, label: "Products" },
+        { path: "/admin/orders", icon: ShoppingCart, label: "Orders" },
         { path: "/admin/deliveries", icon: Truck, label: "Deliveries" },
+        { path: "/admin/delivery-boys", icon: Bike, label: "Delivery Boys" },
+        { path: "/admin/products", icon: Package, label: "Products" },
+        { path: "/admin/subscriptions", icon: CalendarCheck, label: "Subscriptions" },
+        { path: "/admin/users", icon: Users, label: "Users" },
+        { path: "/admin/admins", icon: ShieldCheck, label: "Admins" },
         { path: "/admin/wallet", icon: Wallet, label: "Wallet" },
         { path: "/admin/reports", icon: BarChart3, label: "Reports" },
         { path: "/admin/notifications", icon: Bell, label: "Notifications", badge: unreadCount },
@@ -75,6 +148,23 @@ const AdminLayout = () => {
         }
         return location.pathname.startsWith(path);
     };
+
+    if (isVerifyingAdmin) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-muted/30">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center animate-pulse">
+                        <Shield className="w-8 h-8 text-primary" />
+                    </div>
+                    <p className="text-sm font-medium text-muted-foreground">Verifying administrator access...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (!isAdmin) {
+        return null;
+    }
 
     return (
         <div className="min-h-screen bg-muted/30 flex">
@@ -122,7 +212,10 @@ const AdminLayout = () => {
                     <Button
                         variant="ghost"
                         className={`w-full ${sidebarOpen ? "justify-start" : "justify-center"}`}
-                        onClick={() => signOut()}
+                        onClick={async () => {
+                            await signOut();
+                            navigate("/admin-auth", { replace: true });
+                        }}
                     >
                         <LogOut className="w-5 h-5" />
                         {sidebarOpen && <span className="ml-3">Logout</span>}

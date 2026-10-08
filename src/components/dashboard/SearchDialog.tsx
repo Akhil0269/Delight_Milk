@@ -122,17 +122,19 @@ const SearchDialog = ({ open, onOpenChange }: SearchDialogProps) => {
                                 className="cursor-pointer"
                             >
                                 <div className="flex items-center gap-3 w-full">
-                                    {product.image_url ? (
-                                        <img
-                                            src={product.image_url}
-                                            alt={product.name}
-                                            className="w-10 h-10 rounded-md object-cover"
-                                        />
-                                    ) : (
-                                        <div className="w-10 h-10 rounded-md bg-primary/10 flex items-center justify-center">
-                                            <Milk className="h-5 w-5 text-primary" />
-                                        </div>
-                                    )}
+                                    <div className="w-10 h-10 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0 relative overflow-hidden">
+                                        {product.image_url ? (
+                                            <img
+                                                src={product.image_url}
+                                                alt={product.name}
+                                                className="w-full h-full object-cover"
+                                                onError={(e) => {
+                                                    (e.currentTarget as HTMLElement).style.display = 'none';
+                                                }}
+                                            />
+                                        ) : null}
+                                        <Milk className="h-5 w-5 text-primary absolute -z-10" />
+                                    </div>
                                     <div className="flex-1 min-w-0">
                                         <p className="font-medium text-sm truncate">{product.name}</p>
                                         <div className="flex items-center gap-2 mt-0.5">

@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useProductSearch, useSearchSuggestions, useProductCategories } from "@/hooks/useProductSearch";
+import { Product } from "@/hooks/useProducts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -37,16 +38,20 @@ const SearchPage = () => {
     const inputRef = useRef<HTMLInputElement>(null);
     const { addItem } = useCart();
 
-    const handleAddToCart = (e: React.MouseEvent, product: any) => {
+    const handleAddToCart = (e: React.MouseEvent, product: Product) => {
         e.stopPropagation();
+        if (product.is_active === false) {
+            toast.error(`${product.name} is currently unavailable.`);
+            return;
+        }
         addItem({
             id: product.id,
             name: product.name,
-            price: product.price_per_unit,
-            image_url: product.image_url,
-            unit: product.unit
+            price: Number(product.price_per_unit) || 0,
+            image_url: product.image_url || undefined,
+            unit: product.unit,
+            is_active: product.is_active,
         });
-        toast.success(`Added ${product.name} to cart!`);
     };
 
     // Debounce search query
@@ -117,7 +122,7 @@ const SearchPage = () => {
     const sortedResults = useCallback(() => {
         if (!searchResults) return [];
 
-        let sorted = [...searchResults];
+        const sorted = [...searchResults];
         switch (sortBy) {
             case "price-low":
                 sorted.sort((a, b) => a.price_per_unit - b.price_per_unit);
@@ -348,7 +353,7 @@ const SearchPage = () => {
                                         )}>
                                             {/* Image */}
                                             <div className={cn(
-                                                "relative overflow-hidden bg-muted",
+                                                "relative overflow-hidden bg-muted flex items-center justify-center",
                                                 viewMode === "grid" ? "aspect-square" : "w-32 h-32"
                                             )}>
                                                 {product.image_url ? (
@@ -357,15 +362,27 @@ const SearchPage = () => {
                                                         alt={product.name}
                                                         className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                                                         loading="lazy"
+                                                        onError={(e) => {
+                                                            (e.currentTarget as HTMLElement).style.display = 'none';
+                                                            const sibling = (e.currentTarget as HTMLElement).nextElementSibling;
+                                                            if (sibling) (sibling as HTMLElement).style.display = 'flex';
+                                                        }}
                                                     />
-                                                ) : (
-                                                    <div className="w-full h-full flex items-center justify-center">
-                                                        <Package className="w-12 h-12 text-muted-foreground" />
-                                                    </div>
-                                                )}
+                                                ) : null}
+                                                <div
+                                                    className="w-full h-full flex items-center justify-center text-4xl"
+                                                    style={{ display: product.image_url ? 'none' : 'flex' }}
+                                                >
+                                                    🥛
+                                                </div>
                                                 <Badge className="absolute top-2 right-2 bg-primary">
                                                     {product.category}
                                                 </Badge>
+                                                {product.is_active === false && (
+                                                    <Badge variant="destructive" className="absolute bottom-2 left-2 bg-red-600 text-white font-medium text-xs">
+                                                        Currently unavailable
+                                                    </Badge>
+                                                )}
                                             </div>
 
                                             {/* Content */}
@@ -390,14 +407,25 @@ const SearchPage = () => {
                                                             per {product.unit}
                                                         </p>
                                                     </div>
-                                                    <Button
-                                                        size="sm"
-                                                        onClick={(e) => handleAddToCart(e, product)}
-                                                        className="bg-primary hover:bg-primary/90"
-                                                    >
-                                                        <ShoppingCart className="w-4 h-4 mr-1" />
-                                                        Add
-                                                    </Button>
+                                                    {product.is_active === false ? (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="secondary"
+                                                            disabled
+                                                            className="text-muted-foreground"
+                                                        >
+                                                            Currently unavailable
+                                                        </Button>
+                                                    ) : (
+                                                        <Button
+                                                            size="sm"
+                                                            onClick={(e) => handleAddToCart(e, product)}
+                                                            className="bg-primary hover:bg-primary/90"
+                                                        >
+                                                            <ShoppingCart className="w-4 h-4 mr-1" />
+                                                            Add
+                                                        </Button>
+                                                    )}
                                                 </div>
                                             </CardContent>
                                         </div>

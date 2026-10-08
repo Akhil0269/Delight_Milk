@@ -2,153 +2,35 @@ import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Search, Filter, ShoppingCart, Plus, Minus,
-    Star, Info, TrendingUp, TrendingDown, Award, CheckCircle2, Check, Package,
-    Leaf, Droplets, Clock
+    Star, TrendingDown, Package, Check, AlertCircle, ArrowLeft, Heart
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-import { useAuth } from "@/contexts/AuthContext";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useCart } from "@/contexts/CartContext";
 import DashboardNavbar from "@/components/dashboard/DashboardNavbar";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { useProductPrices, useSubscriptionSavings } from '@/hooks/usePricing';
+import { useProductPrices } from '@/hooks/usePricing';
 import { getCurrentPrice } from '@/utils/pricing';
-import { useProducts } from '@/hooks/useProducts';
-
-// Product catalog with dual pricing support
-const PRODUCT_CATALOG = [
-    {
-        id: 'prod_buffalo_milk',
-        name: 'Buffalo Milk',
-        description: 'Fresh farm buffalo milk, rich in protein and calcium. Perfect for tea, coffee, and cooking.',
-        category: 'Milk',
-        unit: 'L',
-        image_url: '/images/buffalo-milk.jpg',
-        rating: 4.5,
-        review_count: 234,
-        stock_status: 'in_stock',
-        is_featured: true,
-        subscription_enabled: true,
-        addon_product: false,
-    },
-    {
-        id: 'prod_cow_milk',
-        name: 'Cow Milk',
-        description: 'Pure and fresh cow milk, ideal for daily consumption. Light and nutritious.',
-        category: 'Milk',
-        unit: 'L',
-        image_url: '/images/cow-milk.jpg',
-        rating: 4.7,
-        review_count: 456,
-        stock_status: 'in_stock',
-        is_featured: true,
-        subscription_enabled: true,
-        addon_product: false,
-    },
-    {
-        id: 'prod_curd',
-        name: 'Fresh Curd',
-        description: 'Creamy homemade-style curd, rich in probiotics. Perfect for digestion.',
-        category: 'Dairy',
-        unit: 'kg',
-        image_url: '/images/curd.jpg',
-        rating: 4.6,
-        review_count: 189,
-        stock_status: 'in_stock',
-        is_featured: true,
-        subscription_enabled: true,
-        addon_product: false,
-    },
-    {
-        id: 'prod_ghee',
-        name: 'Pure Desi Ghee',
-        description: 'Traditional hand-churned ghee made from pure buffalo butter. Rich aroma and taste.',
-        category: 'Dairy',
-        unit: 'kg',
-        image_url: '/images/ghee.jpg',
-        rating: 4.9,
-        review_count: 567,
-        stock_status: 'in_stock',
-        is_featured: true,
-        subscription_enabled: false,
-        addon_product: true,
-    },
-    {
-        id: 'prod_paneer',
-        name: 'Fresh Paneer',
-        description: 'Soft and fresh paneer made daily from pure milk. Perfect for curries and snacks.',
-        category: 'Dairy',
-        unit: 'kg',
-        image_url: '/images/paneer.jpg',
-        rating: 4.4,
-        review_count: 234,
-        stock_status: 'in_stock',
-        is_featured: false,
-        subscription_enabled: true,
-        addon_product: false,
-    },
-    {
-        id: 'prod_butter',
-        name: 'Pure Butter',
-        description: 'Creamy fresh butter churned from pure cream. Rich and delicious for spreading.',
-        category: 'Dairy',
-        unit: 'kg',
-        image_url: '/images/buttermilk.jpg',
-        rating: 4.7,
-        review_count: 312,
-        stock_status: 'in_stock',
-        is_featured: false,
-        subscription_enabled: false,
-        addon_product: true,
-    },
-    {
-        id: 'prod_cheese',
-        name: 'Cheese',
-        description: 'Premium quality cheese. Perfect for sandwiches and cooking.',
-        category: 'Dairy',
-        unit: 'kg',
-        image_url: '/images/lassi.jpg',
-        rating: 4.6,
-        review_count: 189,
-        stock_status: 'in_stock',
-        is_featured: false,
-        subscription_enabled: false,
-        addon_product: true,
-    },
-];
-
-const CATEGORIES = ['All', 'Milk', 'Dairy'];
+import { useProducts, Product } from '@/hooks/useProducts';
+import { useFavorites } from '@/hooks/useFavorites';
 
 interface ProductQuantity {
     [key: string]: number;
 }
 
 interface ProductCardProps {
-    product: typeof PRODUCT_CATALOG[0];
+    product: Product;
     quantity: number;
     inCart: boolean;
     regularPrice: number;
     subscriptionPrice: number;
     savings: number;
     savingsPercentage: number;
+    isFav: boolean;
+    onToggleFavorite: () => void;
     onUpdateQuantity: (delta: number) => void;
     onAddToCart: () => void;
     onSubscribe: () => void;
@@ -162,6 +44,8 @@ const ProductCard = ({
     subscriptionPrice,
     savings,
     savingsPercentage,
+    isFav,
+    onToggleFavorite,
     onUpdateQuantity,
     onAddToCart,
     onSubscribe,
@@ -169,40 +53,73 @@ const ProductCard = ({
     const hasSavings = savings > 0;
 
     return (
-        <Card className="overflow-hidden hover:shadow-xl transition-all duration-300 group h-full flex flex-col">
-            {/* Image */}
-            <div className="relative overflow-hidden aspect-[4/3]">
-                <img
-                    src={product.image_url}
-                    alt={product.name}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                />
+        <Card className="overflow-hidden hover:shadow-xl transition-all duration-300 group h-full flex flex-col relative">
+            {/* Favorite toggle button */}
+            <button
+                type="button"
+                onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onToggleFavorite();
+                }}
+                className="absolute top-3 right-3 z-20 w-8 h-8 rounded-full bg-background/90 hover:bg-background flex items-center justify-center transition-colors shadow-md text-red-500"
+                title={isFav ? "Remove from favorites" : "Add to favorites"}
+            >
+                <Heart className={`w-4 h-4 ${isFav ? 'fill-red-500 text-red-500' : 'text-muted-foreground'}`} />
+            </button>
+
+            {/* Image with fallback */}
+            <Link to={`/products/${product.id}`} className="relative overflow-hidden aspect-[4/3] block bg-muted">
+                {product.image_url ? (
+                    <img
+                        src={product.image_url}
+                        alt={product.name}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                        onError={(e) => {
+                            (e.currentTarget as HTMLElement).style.display = 'none';
+                            const sibling = (e.currentTarget as HTMLElement).nextElementSibling;
+                            if (sibling) (sibling as HTMLElement).style.display = 'flex';
+                        }}
+                    />
+                ) : null}
+                <div
+                    className="w-full h-full flex items-center justify-center bg-muted text-4xl"
+                    style={{ display: product.image_url ? 'none' : 'flex' }}
+                >
+                    🥛
+                </div>
                 {product.is_featured && (
-                    <Badge className="absolute top-3 right-3 bg-yellow-500">
+                    <Badge className="absolute top-3 left-3 bg-yellow-500">
                         ⭐ Featured
                     </Badge>
                 )}
-                {product.addon_product && (
-                    <Badge className="absolute top-3 left-3 bg-purple-500">
+                {product.is_active === false ? (
+                    <Badge variant="destructive" className="absolute bottom-3 left-3 bg-red-600 text-white font-medium text-xs">
+                        Currently unavailable
+                    </Badge>
+                ) : product.addon_product ? (
+                    <Badge className="absolute bottom-3 left-3 bg-purple-500">
                         <Package className="w-3 h-3 mr-1" />
                         Add-on
                     </Badge>
-                )}
+                ) : null}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-            </div>
+            </Link>
 
             <CardHeader className="flex-grow">
                 <div className="flex items-start justify-between gap-2">
-                    <CardTitle className="text-lg group-hover:text-primary transition-colors">
-                        {product.name}
-                    </CardTitle>
+                    <Link to={`/products/${product.id}`} className="hover:underline">
+                        <CardTitle className="text-lg group-hover:text-primary transition-colors">
+                            {product.name}
+                        </CardTitle>
+                    </Link>
                     <div className="flex items-center gap-1 flex-shrink-0">
                         <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                        <span className="text-sm font-semibold">{product.rating}</span>
+                        <span className="text-sm font-semibold">{product.rating ?? 4.8}</span>
                     </div>
                 </div>
 
-                {/* Dual Pricing Display */}
+                {/* Pricing Display */}
                 <div className="mt-3 space-y-2">
                     {/* Regular Price */}
                     <div className="flex items-baseline gap-2">
@@ -213,7 +130,7 @@ const ProductCard = ({
                         <span className="text-xs text-muted-foreground">per {product.unit}</span>
                     </div>
 
-                    {/* Subscription Price (if different) */}
+                    {/* Subscription Price (if savings exist) */}
                     {hasSavings && (
                         <div className="flex items-baseline gap-2">
                             <span className="text-sm text-muted-foreground">With Subscription:</span>
@@ -236,31 +153,30 @@ const ProductCard = ({
                         </div>
                     )}
 
-                    {/* No Discount Message */}
                     {!hasSavings && product.addon_product && (
                         <div className="text-xs text-muted-foreground italic p-2 bg-muted/30 rounded">
-                            Add-on product • No subscription discount
+                            Add-on product • One-time purchase
                         </div>
                     )}
                 </div>
 
                 <CardDescription className="mt-2 line-clamp-2">
-                    {product.description}
+                    {product.description || "Farm fresh dairy product, 100% pure and natural."}
                 </CardDescription>
 
                 <div className="flex items-center gap-2 mt-2">
-                    <Badge variant="outline" className="text-xs">
+                    <Badge variant="outline" className="text-xs capitalize">
                         {product.category}
                     </Badge>
                     <span className="text-xs text-muted-foreground">
-                        {product.review_count} reviews
+                        {product.review_count ?? 50}+ reviews
                     </span>
                 </div>
             </CardHeader>
 
             <CardFooter className="flex flex-col gap-3 pt-0">
                 {/* Quantity Selector */}
-                <div className="flex items-center justify-between w-full p-2 border rounded-lg">
+                <div className={`flex items-center justify-between w-full p-2 border rounded-lg ${product.is_active === false ? 'opacity-50 pointer-events-none' : ''}`}>
                     <span className="text-sm font-medium">Quantity:</span>
                     <div className="flex items-center gap-2">
                         <Button
@@ -268,6 +184,7 @@ const ProductCard = ({
                             size="icon"
                             className="h-8 w-8"
                             onClick={() => onUpdateQuantity(-1)}
+                            disabled={product.is_active === false}
                         >
                             <Minus className="w-3 h-3" />
                         </Button>
@@ -284,6 +201,7 @@ const ProductCard = ({
                             size="icon"
                             className="h-8 w-8"
                             onClick={() => onUpdateQuantity(1)}
+                            disabled={product.is_active === false}
                         >
                             <Plus className="w-3 h-3" />
                         </Button>
@@ -291,38 +209,44 @@ const ProductCard = ({
                 </div>
 
                 {/* Action Buttons */}
-                <div className="grid grid-cols-2 gap-2 w-full">
-                    <Button
-                        variant="outline"
-                        onClick={onAddToCart}
-                        className="flex items-center gap-2"
-                        disabled={inCart}
-                    >
-                        {inCart ? (
-                            <>
-                                <Check className="w-4 h-4" />
-                                Added
-                            </>
-                        ) : (
-                            <>
-                                <ShoppingCart className="w-4 h-4" />
-                                Cart
-                            </>
-                        )}
+                {product.is_active === false ? (
+                    <Button variant="secondary" disabled className="w-full text-muted-foreground bg-muted font-medium">
+                        Currently unavailable
                     </Button>
-                    {product.subscription_enabled ? (
+                ) : (
+                    <div className="grid grid-cols-2 gap-2 w-full">
                         <Button
-                            onClick={onSubscribe}
-                            className="bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-600/90"
+                            variant="outline"
+                            onClick={onAddToCart}
+                            className="flex items-center gap-2"
+                            disabled={inCart}
                         >
-                            Subscribe
+                            {inCart ? (
+                                <>
+                                    <Check className="w-4 h-4" />
+                                    Added
+                                </>
+                            ) : (
+                                <>
+                                    <ShoppingCart className="w-4 h-4" />
+                                    Cart
+                                </>
+                            )}
                         </Button>
-                    ) : (
-                        <Button variant="secondary" disabled>
-                            One-time only
-                        </Button>
-                    )}
-                </div>
+                        {product.subscription_enabled !== false ? (
+                            <Button
+                                onClick={onSubscribe}
+                                className="bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-600/90"
+                            >
+                                Subscribe
+                            </Button>
+                        ) : (
+                            <Button variant="secondary" disabled>
+                                One-time only
+                            </Button>
+                        )}
+                    </div>
+                )}
             </CardFooter>
         </Card>
     );
@@ -339,6 +263,11 @@ const ProductsEnhanced = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState(urlCategory || 'All');
     const [quantities, setQuantities] = useState<ProductQuantity>({});
+
+    // Fetch canonical products from Supabase
+    const { data: dbProducts = [], isLoading: productsLoading, error: productsError, refetch } = useProducts();
+    const { prices, isLoading: pricesLoading } = useProductPrices();
+    const { isFavorite, toggleFavorite } = useFavorites();
 
     // Update category when URL changes
     useEffect(() => {
@@ -363,53 +292,36 @@ const ProductsEnhanced = () => {
         }
     }, [highlightProductId]);
 
-    // Fetch products from database
-    const { data: dbProducts, isLoading: productsLoading, error: productsError } = useProducts();
-    const { prices, isLoading: pricesLoading } = useProductPrices();
-
-    // Use database products or fallback to static catalog
-    const PRODUCT_CATALOG_TO_USE = useMemo(() => {
-        if (dbProducts && dbProducts.length > 0) {
-            return dbProducts.map((product: any) => ({
-                id: product.id,
-                name: product.product_name,
-                description: product.description || 'Fresh dairy product',
-                category: product.category || 'Dairy',
-                unit: product.unit,
-                image_url: product.image_url || '/images/buffalo-milk.jpg',
-                rating: 4.5,
-                review_count: 100,
-                stock_status: product.is_available ? 'in_stock' : 'out_of_stock',
-                is_featured: product.is_featured || false,
-                subscription_enabled: product.subscription_enabled !== false,
-                addon_product: product.addon_product || false,
-            }));
-        }
-        return PRODUCT_CATALOG;
+    // Extract dynamic categories from active database products
+    const categories = useMemo(() => {
+        const uniqueCategories = new Set(
+            dbProducts
+                .map((p) => p.category)
+                .filter(Boolean)
+                .map((c) => c.charAt(0).toUpperCase() + c.slice(1).toLowerCase())
+        );
+        return ['All', ...Array.from(uniqueCategories).sort()];
     }, [dbProducts]);
 
-    // Get unique categories
-    const CATEGORIES = useMemo(() => {
-        const categories = ['All'];
-        const uniqueCategories = new Set(PRODUCT_CATALOG_TO_USE.map(p => p.category));
-        return [...categories, ...Array.from(uniqueCategories)];
-    }, [PRODUCT_CATALOG_TO_USE]);
-
-    // Filtered products
+    // Filter products based on search and category
     const filteredProducts = useMemo(() => {
-        const filtered = PRODUCT_CATALOG_TO_USE.filter((product) => {
+        const trimmedQuery = searchQuery.trim().toLowerCase();
+        return dbProducts.filter((product) => {
             const matchesSearch =
-                product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                (product.description && product.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                product.category.toLowerCase().includes(searchQuery.toLowerCase());
+                !trimmedQuery ||
+                product.name.toLowerCase().includes(trimmedQuery) ||
+                (product.description && product.description.toLowerCase().includes(trimmedQuery)) ||
+                product.category.toLowerCase().includes(trimmedQuery);
 
+            const productCat = product.category ? (product.category.charAt(0).toUpperCase() + product.category.slice(1).toLowerCase()) : '';
             const matchesCategory =
-                selectedCategory === 'All' || product.category === selectedCategory;
+                selectedCategory === 'All' ||
+                productCat === selectedCategory ||
+                product.category.toLowerCase() === selectedCategory.toLowerCase();
 
             return matchesSearch && matchesCategory;
         });
-        return filtered;
-    }, [searchQuery, selectedCategory, PRODUCT_CATALOG_TO_USE]);
+    }, [searchQuery, selectedCategory, dbProducts]);
 
     // Handle quantity change
     const updateQuantity = (productId: string, delta: number) => {
@@ -419,6 +331,7 @@ const ProductsEnhanced = () => {
             return { ...prev, [productId]: newValue };
         });
     };
+
     const { addItem, items: cartItems } = useCart();
 
     // Check if item is in cart
@@ -427,22 +340,24 @@ const ProductsEnhanced = () => {
     };
 
     // Add to cart
-    const addToCart = (product: any, quantity: number, price: number) => {
+    const addToCart = (product: Product, quantity: number, price: number) => {
+        if (product.is_active === false) {
+            toast.error(`${product.name} is currently unavailable.`);
+            return;
+        }
         addItem({
             id: product.id,
             name: product.name,
             price: price,
-            image_url: product.image_url,
-            unit: product.unit
-        });
-        toast.success(`Added ${quantity} ${product.name} to cart!`);
+            image_url: product.image_url || undefined,
+            unit: product.unit,
+            is_active: product.is_active,
+        }, quantity);
     };
 
     // Subscribe
     const subscribeToProduct = (productId: string, productName: string) => {
-        toast.success(`Subscribed to ${productName}!`, {
-            description: 'You will receive this product daily',
-        });
+        navigate(`/products/${productId}`);
     };
 
     return (
@@ -458,7 +373,7 @@ const ProductsEnhanced = () => {
                                 Product Catalog
                             </h1>
                             <p className="text-muted-foreground mt-1">
-                                Fresh dairy products with transparent dual pricing
+                                Fresh dairy products delivered daily from local farms
                             </p>
                         </div>
 
@@ -467,7 +382,7 @@ const ProductsEnhanced = () => {
                             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
                             <Input
                                 type="text"
-                                placeholder="Search products..."
+                                placeholder="Search products by name or category..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 className="pl-10 pr-4"
@@ -478,7 +393,7 @@ const ProductsEnhanced = () => {
                     {/* Category Filters */}
                     <div className="mt-6 flex items-center gap-3 overflow-x-auto pb-2">
                         <Filter className="w-5 h-5 text-muted-foreground flex-shrink-0" />
-                        {CATEGORIES.map((category) => (
+                        {categories.map((category) => (
                             <Button
                                 key={category}
                                 variant={selectedCategory === category ? 'default' : 'outline'}
@@ -492,20 +407,20 @@ const ProductsEnhanced = () => {
                     </div>
 
                     {/* Pricing Info Banner */}
-                    <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <p className="text-sm text-blue-800">
-                            💡 <strong>Transparent Pricing:</strong> We show both regular and subscription prices upfront. Subscribe to save more on daily essentials!
+                    <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-lg">
+                        <p className="text-sm text-blue-800 dark:text-blue-300">
+                            💡 <strong>Transparent Pricing:</strong> Pay farm-direct rates per unit. Subscribe to save on your daily morning deliveries!
                         </p>
                     </div>
                 </div>
             </div>
 
-            {/* Products Grid */}
+            {/* Products Grid / States */}
             <div className="container mx-auto px-4 py-8">
-                {(productsLoading || pricesLoading) ? (
+                {productsLoading || pricesLoading ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {Array.from({ length: 8 }).map((_, i) => (
-                            <Card key={i} className="h-[600px] animate-pulse">
+                            <Card key={i} className="h-[480px] animate-pulse">
                                 <div className="aspect-[4/3] bg-muted" />
                                 <CardHeader>
                                     <div className="h-6 bg-muted rounded mb-2" />
@@ -520,6 +435,27 @@ const ProductsEnhanced = () => {
                             </Card>
                         ))}
                     </div>
+                ) : productsError ? (
+                    <Card className="p-12 text-center border-destructive/50 max-w-lg mx-auto">
+                        <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-4" />
+                        <h3 className="text-xl font-semibold mb-2">Unable to Load Products</h3>
+                        <p className="text-sm text-muted-foreground mb-4">
+                            {productsError instanceof Error ? productsError.message : "Failed to load product catalog from the database."}
+                        </p>
+                        <Button onClick={() => refetch()}>Retry</Button>
+                    </Card>
+                ) : dbProducts.length === 0 ? (
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="text-center py-20"
+                    >
+                        <Package className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                        <h3 className="text-2xl font-semibold mb-2">No Products Available</h3>
+                        <p className="text-muted-foreground">
+                            The product catalog is currently being updated. Please check back shortly.
+                        </p>
+                    </motion.div>
                 ) : filteredProducts.length === 0 ? (
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
@@ -528,9 +464,18 @@ const ProductsEnhanced = () => {
                     >
                         <div className="text-6xl mb-4">🔍</div>
                         <h3 className="text-2xl font-semibold mb-2">No products found</h3>
-                        <p className="text-muted-foreground">
-                            Try adjusting your search or filter criteria
+                        <p className="text-muted-foreground mb-4">
+                            {searchQuery ? `No products match "${searchQuery}".` : 'No products match the selected category.'}
                         </p>
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setSearchQuery('');
+                                setSelectedCategory('All');
+                            }}
+                        >
+                            Clear Filters
+                        </Button>
                     </motion.div>
                 ) : (
                     <motion.div
@@ -542,17 +487,15 @@ const ProductsEnhanced = () => {
                                 const quantity = quantities[product.id] || 1;
                                 const inCart = isItemInCart(product.id);
 
-                                // Get pricing from the pricing system
-                                const regularPrice = pricesLoading ? product.id === 'prod_buffalo_milk' ? 100 :
-                                    product.id === 'prod_cow_milk' ? 70 :
-                                        product.id === 'prod_curd' ? 150 :
-                                            product.id === 'prod_ghee' ? 999 :
-                                                product.id === 'prod_paneer' ? 350 :
-                                                    product.id === 'prod_butter' ? 450 : 600
-                                    : getCurrentPrice(product.id, false, prices);
-
-                                const subscriptionPrice = pricesLoading ? regularPrice
-                                    : getCurrentPrice(product.id, true, prices);
+                                // Compute current prices safely
+                                const regularPrice = (() => {
+                                    const current = getCurrentPrice(product.id, false, prices);
+                                    return current > 0 ? current : (Number(product.price_per_unit) || 0);
+                                })();
+                                const subscriptionPrice = (() => {
+                                    const current = getCurrentPrice(product.id, true, prices);
+                                    return current > 0 ? current : regularPrice;
+                                })();
 
                                 const savings = (regularPrice - subscriptionPrice) * quantity;
                                 const savingsPercentage = regularPrice > 0 ? ((regularPrice - subscriptionPrice) / regularPrice) * 100 : 0;
@@ -575,6 +518,8 @@ const ProductsEnhanced = () => {
                                             subscriptionPrice={subscriptionPrice}
                                             savings={savings}
                                             savingsPercentage={savingsPercentage}
+                                            isFav={isFavorite(product.id)}
+                                            onToggleFavorite={() => toggleFavorite(product.id, product.name)}
                                             onUpdateQuantity={(delta) => updateQuantity(product.id, delta)}
                                             onAddToCart={() => addToCart(product, quantity, regularPrice)}
                                             onSubscribe={() => subscribeToProduct(product.id, product.name)}
@@ -587,13 +532,13 @@ const ProductsEnhanced = () => {
                 )}
 
                 {/* Results Count */}
-                {filteredProducts.length > 0 && (
+                {!productsLoading && !productsError && filteredProducts.length > 0 && (
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         className="mt-8 text-center text-sm text-muted-foreground"
                     >
-                        Showing {filteredProducts.length} of {PRODUCT_CATALOG.length} products
+                        Showing {filteredProducts.length} of {dbProducts.length} products
                     </motion.div>
                 )}
             </div>

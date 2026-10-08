@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import {
@@ -6,11 +6,12 @@ import {
     MapPin,
     Plus,
     Edit,
-    Trash2,
     Home,
-    Briefcase,
-    MapPinned,
     Check,
+    Loader2,
+    Phone,
+    User,
+    Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,409 +24,360 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
-
-interface Address {
-    id: string;
-    type: "home" | "work" | "other";
-    name: string;
-    phone: string;
-    addressLine1: string;
-    addressLine2?: string;
-    landmark?: string;
-    city: string;
-    state: string;
-    pincode: string;
-    isDefault: boolean;
-}
+import { useProfile, useUpdateProfile } from "@/hooks/useProfile";
+import DashboardNavbar from "@/components/dashboard/DashboardNavbar";
+import { isValidIndianPhone, isValidIndianPincode } from "@/lib/utils";
 
 const AddressManagement = () => {
     const navigate = useNavigate();
-    const [addresses, setAddresses] = useState<Address[]>([
-        {
-            id: "1",
-            type: "home",
-            name: "John Doe",
-            phone: "9876543210",
-            addressLine1: "123 Main Street",
-            addressLine2: "Apartment 4B",
-            landmark: "Near City Mall",
-            city: "Mumbai",
-            state: "Maharashtra",
-            pincode: "400001",
-            isDefault: true,
-        },
-    ]);
+    const { data: profile, isLoading, error } = useProfile();
+    const updateProfile = useUpdateProfile();
 
-    const [showAddDialog, setShowAddDialog] = useState(false);
-    const [editingAddress, setEditingAddress] = useState<Address | null>(null);
-    const [formData, setFormData] = useState<Partial<Address>>({
-        type: "home",
-        isDefault: false,
+    const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+    const [formData, setFormData] = useState({
+        full_name: "",
+        phone: "",
+        address: "",
+        pincode: "",
     });
 
-    const handleAddAddress = () => {
-        if (!formData.name || !formData.phone || !formData.addressLine1 || !formData.city || !formData.pincode) {
-            toast.error("Please fill all required fields");
+    useEffect(() => {
+        if (profile) {
+            // Extract trailing 6-digit pincode if present
+            const pinMatch = profile.address?.match(/\b([1-9][0-9]{5})\b$/);
+            setFormData({
+                full_name: profile.full_name || "",
+                phone: profile.phone || "",
+                address: profile.address || "",
+                pincode: pinMatch ? pinMatch[1] : "",
+            });
+        }
+    }, [profile]);
+
+    const handleSave = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const trimmedAddress = formData.address.trim();
+
+        if (!trimmedAddress) {
+            toast.error("Please enter your complete delivery address");
             return;
         }
 
-        const newAddress: Address = {
-            id: Date.now().toString(),
-            type: formData.type as "home" | "work" | "other",
-            name: formData.name,
-            phone: formData.phone,
-            addressLine1: formData.addressLine1,
-            addressLine2: formData.addressLine2,
-            landmark: formData.landmark,
-            city: formData.city,
-            state: formData.state || "",
-            pincode: formData.pincode,
-            isDefault: formData.isDefault || false,
-        };
-
-        if (newAddress.isDefault) {
-            setAddresses(prev => prev.map(addr => ({ ...addr, isDefault: false })));
+        if (trimmedAddress.length < 5) {
+            toast.error("Address must be at least 5 characters long");
+            return;
         }
 
-        setAddresses(prev => [...prev, newAddress]);
-        setShowAddDialog(false);
-        setFormData({ type: "home", isDefault: false });
-        toast.success("Address added successfully");
+        // Validate Indian Phone if provided
+        if (formData.phone.trim() && !isValidIndianPhone(formData.phone)) {
+            toast.error("Please enter a valid 10-digit Indian mobile number (e.g. 9876543210)");
+            return;
+        }
+
+        // Validate Pincode if provided
+        if (formData.pincode.trim() && !isValidIndianPincode(formData.pincode)) {
+            toast.error("Please enter a valid 6-digit Indian PIN code (e.g. 560066)");
+            return;
+        }
+
+        // Append pincode if entered and not already in address
+        let finalAddress = trimmedAddress;
+        if (formData.pincode.trim() && !finalAddress.includes(formData.pincode.trim())) {
+            finalAddress = `${finalAddress} - ${formData.pincode.trim()}`;
+        }
+
+        try {
+            await updateProfile.mutateAsync({
+                full_name: formData.full_name.trim() || null,
+                phone: formData.phone.trim() || null,
+                address: finalAddress,
+            });
+            toast.success("Delivery address saved successfully");
+            setIsDialogOpen(false);
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : "Failed to save address";
+            toast.error(message);
+        }
     };
 
-    const handleUpdateAddress = () => {
-        if (!editingAddress) return;
-
-        setAddresses(prev =>
-            prev.map(addr =>
-                addr.id === editingAddress.id
-                    ? { ...editingAddress, ...formData }
-                    : formData.isDefault
-                        ? { ...addr, isDefault: false }
-                        : addr
-            )
-        );
-
-        setEditingAddress(null);
-        setFormData({ type: "home", isDefault: false });
-        toast.success("Address updated successfully");
-    };
-
-    const handleDeleteAddress = (id: string) => {
-        setAddresses(prev => prev.filter(addr => addr.id !== id));
-        toast.success("Address deleted successfully");
-    };
-
-    const handleSetDefault = (id: string) => {
-        setAddresses(prev =>
-            prev.map(addr => ({
-                ...addr,
-                isDefault: addr.id === id,
-            }))
-        );
-        toast.success("Default address updated");
-    };
-
-    const getAddressIcon = (type: string) => {
-        switch (type) {
-            case "home":
-                return Home;
-            case "work":
-                return Briefcase;
-            default:
-                return MapPinned;
+    const handleDeleteAddress = async () => {
+        try {
+            await updateProfile.mutateAsync({
+                address: null,
+            });
+            toast.success("Delivery address removed");
+            setIsDeleteDialogOpen(false);
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : "Failed to delete address";
+            toast.error(message);
         }
     };
 
     return (
         <div className="min-h-screen bg-muted/30">
+            <DashboardNavbar />
+
             {/* Header */}
-            <div className="bg-gradient-to-r from-primary to-primary/80 text-white">
-                <div className="container mx-auto px-4 py-6">
+            <div className="bg-card border-b sticky top-16 md:top-20 z-30">
+                <div className="container mx-auto px-4 py-4">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => navigate("/dashboard")}
-                                className="text-white hover:bg-white/20"
+                                onClick={() => navigate(-1)}
                             >
                                 <ArrowLeft className="w-5 h-5" />
                             </Button>
                             <div>
-                                <h1 className="text-2xl font-bold">Delivery Addresses</h1>
-                                <p className="text-white/80 text-sm">Manage your delivery locations</p>
+                                <h1 className="text-2xl font-bold">Manage Delivery Addresses</h1>
+                                <p className="text-sm text-muted-foreground">
+                                    Primary address for your morning milk & dairy delivery
+                                </p>
                             </div>
                         </div>
-                        <Button
-                            onClick={() => setShowAddDialog(true)}
-                            className="bg-white text-primary hover:bg-white/90"
-                        >
-                            <Plus className="w-4 h-4 mr-2" />
-                            Add New
-                        </Button>
+
+                        {profile?.address && (
+                            <Button
+                                onClick={() => setIsDialogOpen(true)}
+                                size="sm"
+                                className="flex items-center gap-2"
+                            >
+                                <Edit className="w-4 h-4" />
+                                Edit Address
+                            </Button>
+                        )}
                     </div>
                 </div>
             </div>
 
             {/* Main Content */}
-            <main className="container mx-auto px-4 py-8">
-                {addresses.length === 0 ? (
+            <div className="container mx-auto px-4 py-8 max-w-3xl">
+                {isLoading ? (
+                    <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-3">
+                        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                        <p>Loading your saved address...</p>
+                    </div>
+                ) : error ? (
+                    <div className="text-center py-16 bg-card rounded-2xl border p-8">
+                        <p className="text-destructive font-medium mb-2">Unable to load profile address</p>
+                        <p className="text-sm text-muted-foreground mb-4">
+                            Please check your network connection and try again.
+                        </p>
+                        <Button variant="outline" onClick={() => window.location.reload()}>
+                            Retry
+                        </Button>
+                    </div>
+                ) : !profile?.address ? (
                     <motion.div
-                        initial={{ opacity: 0, y: 20 }}
+                        initial={{ opacity: 0, y: 15 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="text-center py-12"
+                        className="text-center py-20 bg-card rounded-2xl border p-8 shadow-sm"
                     >
-                        <MapPin className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-                        <h3 className="text-xl font-semibold mb-2">No Addresses Added</h3>
-                        <p className="text-muted-foreground mb-6">Add your first delivery address to get started</p>
-                        <Button onClick={() => setShowAddDialog(true)}>
-                            <Plus className="w-4 h-4 mr-2" />
-                            Add Address
+                        <div className="w-16 h-16 rounded-full bg-primary/10 mx-auto flex items-center justify-center mb-4">
+                            <MapPin className="w-8 h-8 text-primary" />
+                        </div>
+                        <h2 className="text-2xl font-bold mb-2">No Delivery Address Set</h2>
+                        <p className="text-muted-foreground text-sm max-w-md mx-auto mb-6">
+                            Add your house, apartment, or society address to receive fresh farm milk before 7:00 AM every morning.
+                        </p>
+                        <Button onClick={() => setIsDialogOpen(true)} className="gap-2">
+                            <Plus className="w-4 h-4" />
+                            Add Delivery Address
                         </Button>
                     </motion.div>
                 ) : (
-                    <div className="grid gap-4 md:grid-cols-2">
-                        {addresses.map((address, index) => {
-                            const Icon = getAddressIcon(address.type);
-                            return (
-                                <motion.div
-                                    key={address.id}
-                                    initial={{ opacity: 0, y: 20 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: index * 0.05 }}
-                                >
-                                    <Card className="relative hover:shadow-lg transition-shadow">
-                                        {address.isDefault && (
-                                            <Badge className="absolute top-4 right-4 bg-green-500">
-                                                <Check className="w-3 h-3 mr-1" />
-                                                Default
+                    <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="space-y-4"
+                    >
+                        <Card className="border-2 border-primary/20 shadow-sm relative overflow-hidden">
+                            <div className="h-1.5 bg-primary w-full absolute top-0 left-0" />
+                            <CardContent className="p-6">
+                                <div className="flex items-start justify-between gap-4">
+                                    <div className="space-y-3 flex-1">
+                                        <div className="flex items-center gap-2">
+                                            <Badge variant="default" className="flex items-center gap-1 bg-green-600 hover:bg-green-600 text-xs">
+                                                <Check className="w-3 h-3" />
+                                                Primary Delivery Address
                                             </Badge>
-                                        )}
-                                        <CardContent className="p-6">
-                                            <div className="flex items-start gap-4">
-                                                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                                    <Icon className="w-6 h-6 text-primary" />
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="flex items-center gap-2 mb-2">
-                                                        <h3 className="font-semibold text-lg">{address.name}</h3>
-                                                        <Badge variant="outline" className="capitalize">
-                                                            {address.type}
-                                                        </Badge>
-                                                    </div>
-                                                    <p className="text-sm text-muted-foreground mb-1">{address.phone}</p>
-                                                    <p className="text-sm">
-                                                        {address.addressLine1}
-                                                        {address.addressLine2 && `, ${address.addressLine2}`}
-                                                    </p>
-                                                    {address.landmark && (
-                                                        <p className="text-sm text-muted-foreground">
-                                                            Landmark: {address.landmark}
-                                                        </p>
-                                                    )}
-                                                    <p className="text-sm">
-                                                        {address.city}, {address.state} - {address.pincode}
-                                                    </p>
+                                            <Badge variant="outline" className="flex items-center gap-1 text-xs">
+                                                <Home className="w-3 h-3" />
+                                                Home
+                                            </Badge>
+                                        </div>
 
-                                                    <div className="flex gap-2 mt-4">
-                                                        {!address.isDefault && (
-                                                            <Button
-                                                                variant="outline"
-                                                                size="sm"
-                                                                onClick={() => handleSetDefault(address.id)}
-                                                            >
-                                                                Set as Default
-                                                            </Button>
-                                                        )}
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            onClick={() => {
-                                                                setEditingAddress(address);
-                                                                setFormData(address);
-                                                            }}
-                                                        >
-                                                            <Edit className="w-4 h-4 mr-1" />
-                                                            Edit
-                                                        </Button>
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            onClick={() => handleDeleteAddress(address.id)}
-                                                            className="text-destructive hover:text-destructive"
-                                                        >
-                                                            <Trash2 className="w-4 h-4 mr-1" />
-                                                            Delete
-                                                        </Button>
-                                                    </div>
-                                                </div>
+                                        <div className="space-y-1">
+                                            <div className="flex items-center gap-2 text-foreground font-semibold">
+                                                <User className="w-4 h-4 text-muted-foreground" />
+                                                <span>{profile.full_name || "Valued Customer"}</span>
                                             </div>
-                                        </CardContent>
-                                    </Card>
-                                </motion.div>
-                            );
-                        })}
-                    </div>
-                )}
-            </main>
+                                            {profile.phone && (
+                                                <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                                                    <Phone className="w-4 h-4" />
+                                                    <span>{profile.phone}</span>
+                                                </div>
+                                            )}
+                                        </div>
 
-            {/* Add/Edit Address Dialog */}
-            <Dialog open={showAddDialog || !!editingAddress} onOpenChange={(open) => {
-                if (!open) {
-                    setShowAddDialog(false);
-                    setEditingAddress(null);
-                    setFormData({ type: "home", isDefault: false });
-                }
-            }}>
-                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                                        <div className="flex items-start gap-2 pt-2 border-t text-sm">
+                                            <MapPin className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                                            <p className="text-foreground leading-relaxed whitespace-pre-line">
+                                                {profile.address}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setIsDialogOpen(true)}
+                                            className="gap-1.5"
+                                        >
+                                            <Edit className="w-3.5 h-3.5" />
+                                            Edit
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setIsDeleteDialogOpen(true)}
+                                            className="gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                            Delete
+                                        </Button>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <div className="p-4 bg-muted/40 rounded-xl border text-xs text-muted-foreground flex items-center gap-3">
+                            <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                            <span>
+                                This address is automatically linked to your subscriptions and morning 7:00 AM delivery runs.
+                            </span>
+                        </div>
+                    </motion.div>
+                )}
+            </div>
+
+            {/* Edit / Add Address Dialog */}
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogContent className="max-w-md">
                     <DialogHeader>
-                        <DialogTitle>{editingAddress ? "Edit Address" : "Add New Address"}</DialogTitle>
+                        <DialogTitle>
+                            {profile?.address ? "Edit Delivery Address" : "Add Delivery Address"}
+                        </DialogTitle>
                         <DialogDescription>
-                            {editingAddress ? "Update your delivery address details" : "Enter your delivery address details"}
+                            Your daily deliveries will arrive at this location.
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <Label htmlFor="name">Full Name *</Label>
-                                <Input
-                                    id="name"
-                                    value={formData.name || ""}
-                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                    placeholder="John Doe"
-                                />
-                            </div>
-                            <div>
-                                <Label htmlFor="phone">Phone Number *</Label>
-                                <Input
-                                    id="phone"
-                                    value={formData.phone || ""}
-                                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                    placeholder="9876543210"
-                                />
-                            </div>
+                    <form onSubmit={handleSave} className="space-y-4 py-2">
+                        <div className="space-y-2">
+                            <Label htmlFor="full_name">Recipient Name</Label>
+                            <Input
+                                id="full_name"
+                                value={formData.full_name}
+                                onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                                placeholder="e.g. Priya Sharma"
+                            />
                         </div>
 
-                        <div>
-                            <Label>Address Type *</Label>
-                            <RadioGroup
-                                value={formData.type}
-                                onValueChange={(value) => setFormData({ ...formData, type: value as any })}
-                                className="flex gap-4 mt-2"
+                        <div className="space-y-2">
+                            <Label htmlFor="phone">Contact Phone Number</Label>
+                            <Input
+                                id="phone"
+                                type="tel"
+                                value={formData.phone}
+                                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                                placeholder="e.g. +91 9876543210"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="pincode">PIN Code (6 digits)</Label>
+                            <Input
+                                id="pincode"
+                                maxLength={6}
+                                value={formData.pincode}
+                                onChange={(e) => setFormData({ ...formData, pincode: e.target.value.replace(/\D/g, '') })}
+                                placeholder="e.g. 560066"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="address">Full Address / Flat / Building / Street / Landmark *</Label>
+                            <Textarea
+                                id="address"
+                                required
+                                rows={4}
+                                value={formData.address}
+                                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                                placeholder="Flat 402, Sunshine Towers, 14th Main, Near City Mall, Whitefield, Bengaluru"
+                            />
+                        </div>
+
+                        <DialogFooter className="pt-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setIsDialogOpen(false)}
+                                disabled={updateProfile.isPending}
                             >
-                                <div className="flex items-center space-x-2">
-                                    <RadioGroupItem value="home" id="home" />
-                                    <Label htmlFor="home" className="cursor-pointer">Home</Label>
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                    <RadioGroupItem value="work" id="work" />
-                                    <Label htmlFor="work" className="cursor-pointer">Work</Label>
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                    <RadioGroupItem value="other" id="other" />
-                                    <Label htmlFor="other" className="cursor-pointer">Other</Label>
-                                </div>
-                            </RadioGroup>
-                        </div>
-
-                        <div>
-                            <Label htmlFor="addressLine1">Address Line 1 *</Label>
-                            <Input
-                                id="addressLine1"
-                                value={formData.addressLine1 || ""}
-                                onChange={(e) => setFormData({ ...formData, addressLine1: e.target.value })}
-                                placeholder="House No., Building Name"
-                            />
-                        </div>
-
-                        <div>
-                            <Label htmlFor="addressLine2">Address Line 2</Label>
-                            <Input
-                                id="addressLine2"
-                                value={formData.addressLine2 || ""}
-                                onChange={(e) => setFormData({ ...formData, addressLine2: e.target.value })}
-                                placeholder="Road Name, Area, Colony"
-                            />
-                        </div>
-
-                        <div>
-                            <Label htmlFor="landmark">Landmark</Label>
-                            <Input
-                                id="landmark"
-                                value={formData.landmark || ""}
-                                onChange={(e) => setFormData({ ...formData, landmark: e.target.value })}
-                                placeholder="Near City Mall"
-                            />
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-4">
-                            <div>
-                                <Label htmlFor="city">City *</Label>
-                                <Input
-                                    id="city"
-                                    value={formData.city || ""}
-                                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                                    placeholder="Mumbai"
-                                />
-                            </div>
-                            <div>
-                                <Label htmlFor="state">State</Label>
-                                <Input
-                                    id="state"
-                                    value={formData.state || ""}
-                                    onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                                    placeholder="Maharashtra"
-                                />
-                            </div>
-                            <div>
-                                <Label htmlFor="pincode">Pincode *</Label>
-                                <Input
-                                    id="pincode"
-                                    value={formData.pincode || ""}
-                                    onChange={(e) => setFormData({ ...formData, pincode: e.target.value })}
-                                    placeholder="400001"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="flex items-center space-x-2">
-                            <input
-                                type="checkbox"
-                                id="isDefault"
-                                checked={formData.isDefault}
-                                onChange={(e) => setFormData({ ...formData, isDefault: e.target.checked })}
-                                className="rounded border-gray-300"
-                            />
-                            <Label htmlFor="isDefault" className="cursor-pointer">
-                                Set as default delivery address
-                            </Label>
-                        </div>
-                    </div>
-
-                    <DialogFooter>
-                        <Button
-                            variant="outline"
-                            onClick={() => {
-                                setShowAddDialog(false);
-                                setEditingAddress(null);
-                                setFormData({ type: "home", isDefault: false });
-                            }}
-                        >
-                            Cancel
-                        </Button>
-                        <Button onClick={editingAddress ? handleUpdateAddress : handleAddAddress}>
-                            {editingAddress ? "Update Address" : "Add Address"}
-                        </Button>
-                    </DialogFooter>
+                                Cancel
+                            </Button>
+                            <Button type="submit" disabled={updateProfile.isPending} className="gap-2">
+                                {updateProfile.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                                Save Address
+                            </Button>
+                        </DialogFooter>
+                    </form>
                 </DialogContent>
             </Dialog>
+
+            {/* Delete Address Confirmation Dialog */}
+            <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Remove Delivery Address?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to remove your saved delivery address? You will need to enter an address again before placing new orders or renewing subscriptions.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={updateProfile.isPending}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={(e) => {
+                                e.preventDefault();
+                                handleDeleteAddress();
+                            }}
+                            disabled={updateProfile.isPending}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            {updateProfile.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                            Delete Address
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 };

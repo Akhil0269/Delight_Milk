@@ -59,6 +59,14 @@ const statusConfig = {
     label: "Today",
     description: "Today's delivery",
   },
+  cancelled: {
+    bg: "bg-muted",
+    text: "text-muted-foreground",
+    border: "border-border",
+    icon: X,
+    label: "Cancelled",
+    description: "Delivery cancelled - No charges applied",
+  },
   empty: {
     bg: "bg-transparent",
     text: "text-muted-foreground/30",
@@ -113,16 +121,30 @@ const DeliveryCalendar = () => {
         return { date, status: "empty" as const };
       }
 
-      // Get the primary delivery status
-      const delivery = dayDeliveries[0];
+      // Priority when multiple deliveries exist on the same day:
+      // delivered (5) > upcoming (4) > paused (3) > missed (2) > cancelled (1)
+      const priorityOrder: Record<string, number> = {
+        delivered: 5,
+        upcoming: 4,
+        paused: 3,
+        missed: 2,
+        cancelled: 1,
+      };
+
+      const sortedDeliveries = [...dayDeliveries].sort((a, b) => {
+        return (priorityOrder[b.status] || 0) - (priorityOrder[a.status] || 0);
+      });
+
+      const delivery = sortedDeliveries[0];
       let status: DayData["status"] = delivery.status;
 
-      // Override with "today" if it's today
-      if (isCurrentMonth && date === today.getDate()) {
+      // Override with "today" if it's today and not cancelled
+      if (isCurrentMonth && date === today.getDate() && status !== "cancelled") {
         status = "today";
       }
 
-      const totalAmount = dayDeliveries.reduce((sum, d) => sum + d.quantity * d.price_per_unit, 0);
+      const activeDeliveries = dayDeliveries.filter((d) => d.status !== "cancelled");
+      const totalAmount = activeDeliveries.reduce((sum, d) => sum + Number(d.quantity || 0) * Number(d.price_per_unit || 0), 0);
 
       return {
         date,
@@ -150,7 +172,10 @@ const DeliveryCalendar = () => {
   };
 
   const totalDelivered = monthData.filter(d => d.status === "delivered").length;
-  const totalAmount = monthData.reduce((sum, d) => sum + (d.amount || 0), 0);
+  const totalAmount = monthData.reduce((sum, d) => {
+    if (d.status === "cancelled" || d.status === "missed") return sum;
+    return sum + (d.amount || 0);
+  }, 0);
 
   if (isLoading) {
     return (
@@ -204,8 +229,8 @@ const DeliveryCalendar = () => {
 
         {/* Day cells */}
         {monthData.map((day, index) => {
-          const config = statusConfig[day.status];
-          const Icon = config.icon;
+          const config = (day.status && statusConfig[day.status]) || statusConfig.empty;
+          const Icon = config.icon || Clock;
 
           return (
             <motion.button
@@ -272,71 +297,89 @@ const DeliveryCalendar = () => {
               onClick={(e) => e.stopPropagation()}
               className="bg-card rounded-3xl p-6 max-w-md w-full shadow-2xl border border-border max-h-[90vh] overflow-y-auto"
             >
-              {/* Modal content continues... */}
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h3 className="text-2xl font-bold">
-                    {monthNames[currentMonth.getMonth()]} {selectedDay.date}, {currentMonth.getFullYear()}
-                  </h3>
-                  <p className="text-sm text-muted-foreground mt-1">Delivery Details</p>
-                </div>
-                <div className={`px-4 py-2 rounded-full text-sm font-semibold ${statusConfig[selectedDay.status].bg} ${statusConfig[selectedDay.status].text} border-2 ${statusConfig[selectedDay.status].border}`}>
-                  {statusConfig[selectedDay.status].label}
-                </div>
-              </div>
-
-              {/* Delivered Status */}
-              {selectedDay.status === "delivered" && (
-                <div className="space-y-4">
-                  <div className="bg-green-50 rounded-xl p-4 border-2 border-green-200">
-                    <h4 className="font-semibold text-green-900 mb-3 flex items-center gap-2">
-                      <Check className="w-5 h-5" />
-                      Delivered Items
-                    </h4>
-
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-start">
-                        <span className="text-sm text-green-700">Product</span>
-                        <span className="font-semibold text-green-900 text-right">{selectedDay.quantity || "Full Cream Milk - 1L"}</span>
+              {/* Modal content */}
+              {(() => {
+                const modalConfig = (selectedDay.status && statusConfig[selectedDay.status]) || statusConfig.empty;
+                return (
+                  <>
+                    <div className="flex items-center justify-between mb-6">
+                      <div>
+                        <h3 className="text-2xl font-bold">
+                          {monthNames[currentMonth.getMonth()]} {selectedDay.date}, {currentMonth.getFullYear()}
+                        </h3>
+                        <p className="text-sm text-muted-foreground mt-1">Delivery Details</p>
                       </div>
-
-                      <div className="flex justify-between items-center pt-2 border-t border-green-200">
-                        <span className="text-sm text-green-700">Unit Price (Locked)</span>
-                        <span className="font-bold text-green-900">
-                          ₹{selectedDay.amount ? (selectedDay.amount / (parseFloat(selectedDay.quantity?.split('L')[0] || '1') || 1)).toFixed(2) : '60.00'} / unit
-                        </span>
-                      </div>
-
-                      <div className="flex justify-between items-center pt-2 border-t border-green-200">
-                        <span className="text-sm text-green-700">Delivery Time</span>
-                        <span className="font-medium text-green-900">{selectedDay.time || "6:30 AM"}</span>
-                      </div>
-
-                      <div className="flex justify-between items-center pt-2 border-t-2 border-green-300">
-                        <span className="font-semibold text-green-800">Amount Charged</span>
-                        <span className="text-xl font-bold text-green-900">₹{selectedDay.amount?.toFixed(2) || '60.00'}</span>
+                      <div className={`px-4 py-2 rounded-full text-sm font-semibold ${modalConfig.bg} ${modalConfig.text} border-2 ${modalConfig.border}`}>
+                        {modalConfig.label}
                       </div>
                     </div>
-                  </div>
 
-                  <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
-                    <p className="text-xs text-blue-800">
-                      ✓ This delivery is <strong>included in monthly billing</strong>
-                    </p>
-                  </div>
-                </div>
-              )}
+                    {/* Delivered Status */}
+                    {selectedDay.status === "delivered" && (
+                      <div className="space-y-4">
+                        <div className="bg-green-50 rounded-xl p-4 border-2 border-green-200">
+                          <h4 className="font-semibold text-green-900 mb-3 flex items-center gap-2">
+                            <Check className="w-5 h-5" />
+                            Delivered Items
+                          </h4>
 
-              {/* Missed/Paused/Upcoming statuses remain the same... */}
-              {selectedDay.status === "missed" && (
-                <div className="bg-red-50 rounded-xl p-4 border-2 border-red-200">
-                  <p className="text-sm text-red-700 mb-4">{statusConfig.missed.description}</p>
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-red-800">Amount Charged</span>
-                    <span className="text-xl font-bold text-red-900">₹0.00</span>
-                  </div>
-                </div>
-              )}
+                          <div className="space-y-3">
+                            <div className="flex justify-between items-start">
+                              <span className="text-sm text-green-700">Product</span>
+                              <span className="font-semibold text-green-900 text-right">{selectedDay.quantity || "Full Cream Milk - 1L"}</span>
+                            </div>
+
+                            <div className="flex justify-between items-center pt-2 border-t border-green-200">
+                              <span className="text-sm text-green-700">Unit Price (Locked)</span>
+                              <span className="font-bold text-green-900">
+                                ₹{selectedDay.amount ? (selectedDay.amount / (parseFloat(selectedDay.quantity?.split('L')[0] || '1') || 1)).toFixed(2) : '60.00'} / unit
+                              </span>
+                            </div>
+
+                            <div className="flex justify-between items-center pt-2 border-t border-green-200">
+                              <span className="text-sm text-green-700">Delivery Time</span>
+                              <span className="font-medium text-green-900">{selectedDay.time || "6:30 AM"}</span>
+                            </div>
+
+                            <div className="flex justify-between items-center pt-2 border-t-2 border-green-300">
+                              <span className="font-semibold text-green-800">Amount Charged</span>
+                              <span className="text-xl font-bold text-green-900">₹{selectedDay.amount?.toFixed(2) || '60.00'}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                          <p className="text-xs text-blue-800">
+                            ✓ This delivery is <strong>included in monthly billing</strong>
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Cancelled Status */}
+                    {selectedDay.status === "cancelled" && (
+                      <div className="bg-muted/50 rounded-xl p-4 border-2 border-border">
+                        <p className="text-sm text-muted-foreground mb-4">{modalConfig.description}</p>
+                        <div className="flex justify-between items-center">
+                          <span className="font-semibold text-muted-foreground">Amount Charged</span>
+                          <span className="text-xl font-bold text-foreground">₹0.00</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Missed Status */}
+                    {selectedDay.status === "missed" && (
+                      <div className="bg-red-50 rounded-xl p-4 border-2 border-red-200">
+                        <p className="text-sm text-red-700 mb-4">{modalConfig.description}</p>
+                        <div className="flex justify-between items-center">
+                          <span className="font-semibold text-red-800">Amount Charged</span>
+                          <span className="text-xl font-bold text-red-900">₹0.00</span>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
 
               <div className="flex gap-3 mt-6">
                 <Button variant="outline" onClick={() => setSelectedDay(null)} className="flex-1">

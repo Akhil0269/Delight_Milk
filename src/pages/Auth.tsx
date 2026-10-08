@@ -29,9 +29,6 @@ const Auth = () => {
   const { signIn, signUp, refreshSession } = useAuth();
   const navigate = useNavigate();
 
-  // HARDCODED ADMIN EMAIL - Only this email can access admin
-  const AUTHORIZED_ADMIN_EMAIL = "yaswanthvenkata245@gmail.com";
-
   // Development mode OTP
   const MOCK_OTP = "123456";
 
@@ -111,7 +108,7 @@ const Auth = () => {
         description: "Check your SMS messages"
       });
       console.log(`✅ Real OTP sent via SMS to: ${formattedPhone}`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Send OTP error:", error);
 
       // Fallback to development mode on any error
@@ -142,44 +139,7 @@ const Auth = () => {
 
       console.log(`🔐 Attempting to verify OTP for: ${formattedPhone}`);
 
-      // ✅ CHECK DEVELOPMENT MODE FIRST
-      const isDevMode = import.meta.env.VITE_DEV_MODE === 'true';
-
-      if (isDevMode || otp === MOCK_OTP) {
-        if (otp !== MOCK_OTP) {
-          toast.error("Invalid OTP. Please try again.");
-          setLoading(false);
-          return;
-        }
-
-        console.log("🔧 Development mode verification");
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        // Store user session in localStorage for development
-        const devUser = {
-          id: `dev_${phoneNumber}`,
-          phone: phoneNumber,
-          email: `${phoneNumber}@phone.dev`,
-          full_name: `User ${phoneNumber}`,
-          created_at: new Date().toISOString(),
-        };
-
-        console.log('📦 Storing dev session in localStorage');
-        localStorage.setItem('dev_user', JSON.stringify(devUser));
-        localStorage.setItem('dev_session', 'active');
-
-        console.log('✅ Dev session stored, showing success toast');
-        toast.success("Phone verified! (Development Mode)", {
-          description: "Redirecting to dashboard..."
-        });
-
-        console.log('🚀 Navigating to /dashboard');
-        navigate("/dashboard");
-        setLoading(false);
-        return;
-      }
-
-      // ✅ PRODUCTION MODE: Try to verify real OTP via Supabase
+      // Verify OTP via Supabase
       const { data, error } = await supabase.auth.verifyOtp({
         phone: formattedPhone,
         token: otp,
@@ -256,9 +216,10 @@ const Auth = () => {
         description: "Welcome to Delight Milk!"
       });
       navigate("/dashboard");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Verify OTP error:", error);
-      toast.error(error.message || "Invalid OTP. Please try again.");
+      const msg = error instanceof Error ? error.message : "Invalid OTP. Please try again.";
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -277,116 +238,57 @@ const Auth = () => {
       return;
     }
 
-    // Handle email/password flow
+    const emailToUse = email.trim();
+    if (!emailToUse) {
+      toast.error("Please enter your email");
+      return;
+    }
+
+    if (!password) {
+      toast.error("Please enter your password");
+      return;
+    }
+
     setLoading(true);
-
     try {
-      // ✅ CHECK DEVELOPMENT MODE FIRST
-      const isDevMode = import.meta.env.VITE_DEV_MODE === 'true';
-
-      if (isDevMode) {
-        console.log("🔧 Development mode: Email auth using localStorage");
-
-        // Simulate network delay
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        if (isLogin) {
-          // Development mode LOGIN
-          const storedUsers = JSON.parse(localStorage.getItem('dev_email_users') || '{}');
-          const userKey = email.toLowerCase();
-
-          if (storedUsers[userKey] && storedUsers[userKey].password === password) {
-            // User exists and password matches
-            const devUser = {
-              id: storedUsers[userKey].id,
-              email: email,
-              full_name: storedUsers[userKey].full_name,
-              created_at: storedUsers[userKey].created_at,
-            };
-
-            localStorage.setItem('dev_user', JSON.stringify(devUser));
-            localStorage.setItem('dev_session', 'active');
-
-            // 🔄 Force update context
-            await refreshSession();
-
-            toast.success("Welcome back! (Development Mode)", {
-              description: "Redirecting to dashboard..."
-            });
-
-            if (userType === "admin") {
-              navigate("/admin");
-            } else {
-              navigate("/dashboard");
-            }
-          } else {
-            toast.error("Invalid email or password");
-          }
-        } else {
-          // Development mode SIGNUP
-          if (!fullName.trim()) {
-            toast.error("Please enter your name");
-            setLoading(false);
-            return;
-          }
-
-          const storedUsers = JSON.parse(localStorage.getItem('dev_email_users') || '{}');
-          const userKey = email.toLowerCase();
-
-          if (storedUsers[userKey]) {
-            toast.error("Email already registered. Please login instead.");
-          } else {
-            // Create new user
-            const newUser = {
-              id: `dev_email_${Date.now()}`,
-              email: email,
-              password: password, // In dev mode only!
-              full_name: fullName,
-              created_at: new Date().toISOString(),
-            };
-
-            storedUsers[userKey] = newUser;
-            localStorage.setItem('dev_email_users', JSON.stringify(storedUsers));
-
-            // Set active session
-            const devUser = {
-              id: newUser.id,
-              email: newUser.email,
-              full_name: newUser.full_name,
-              created_at: newUser.created_at,
-            };
-
-            localStorage.setItem('dev_user', JSON.stringify(devUser));
-            localStorage.setItem('dev_session', 'active');
-
-            // 🔄 Force update context
-            await refreshSession();
-
-            toast.success("Account created! (Development Mode)", {
-              description: "Redirecting to dashboard..."
-            });
-            navigate("/dashboard");
-          }
-        }
-
-        setLoading(false);
-        return;
-      }
-
-      // ✅ PRODUCTION MODE: Real Supabase authentication
       if (isLogin) {
-        // Check if trying to login as admin with unauthorized email
-        if (userType === "admin" && email.toLowerCase() !== AUTHORIZED_ADMIN_EMAIL.toLowerCase()) {
-          toast.error("Access denied. You are not authorized to access the admin panel.");
-          setLoading(false);
+        const { error } = await signIn(emailToUse, password);
+        if (error) {
           return;
         }
 
-        const { error } = await signIn(email, password);
-        if (error) throw error;
-
-        // Redirect based on user type selection
+        // Redirect based on user type selection and RBAC
         if (userType === "admin") {
+          const { data: { user: currentUser } } = await supabase.auth.getUser();
+          let isAdmin = false;
+
+          if (currentUser) {
+            const { data: rpcAdmin, error: rpcError } = await supabase.rpc("is_admin", {
+              user_id: currentUser.id,
+            });
+
+            if (!rpcError && rpcAdmin === true) {
+              isAdmin = true;
+            } else {
+              const { data: roleData, error: roleError } = await supabase
+                .from("user_roles")
+                .select("role")
+                .eq("user_id", currentUser.id)
+                .eq("role", "admin")
+                .maybeSingle();
+
+              if (!roleError && roleData?.role === "admin") {
+                isAdmin = true;
+              }
+            }
+          }
+
+          if (!isAdmin) {
+            await supabase.auth.signOut();
+            toast.error("Access denied. Your account does not have administrator privileges.");
+            return;
+          }
+
           toast.success("Welcome back, Admin!");
           navigate("/admin");
         } else {
@@ -396,44 +298,28 @@ const Auth = () => {
       } else {
         if (!fullName.trim()) {
           toast.error("Please enter your name");
-          setLoading(false);
           return;
         }
-        const { error } = await signUp(email, password, fullName);
-        if (error) throw error;
-        toast.success("Account created successfully!");
-        navigate("/dashboard");
+
+        const { error, needsVerification } = await signUp(emailToUse, password, fullName.trim());
+        if (error) {
+          return;
+        }
+
+        if (needsVerification) {
+          toast.info("Account created successfully. Please verify your email before logging in.", {
+            duration: 6000,
+          });
+          setIsLogin(true);
+        } else {
+          toast.success("Account created successfully!");
+          navigate("/dashboard");
+        }
       }
-    } catch (error: any) {
-      console.error("Email auth error:", error);
-
-      // ✅ FALLBACK: If Supabase fails, use development mode
-      if (error.message && (
-        error.message.includes("fetch") ||
-        error.message.includes("Failed to fetch") ||
-        error.message.includes("network")
-      )) {
-        console.log("🔧 Supabase failed, falling back to development mode");
-
-        // Simulate successful auth in dev mode
-        const devUser = {
-          id: `dev_email_${Date.now()}`,
-          email: email,
-          full_name: fullName || email.split('@')[0],
-          created_at: new Date().toISOString(),
-        };
-
-        localStorage.setItem('dev_user', JSON.stringify(devUser));
-        localStorage.setItem('dev_session', 'active');
-
-        toast.warning(isLogin ? "Logged in (Development Mode)" : "Account created (Development Mode)", {
-          description: "Supabase unavailable, using offline mode"
-        });
-
-        navigate("/dashboard");
-      } else {
-        toast.error(error.message || "Something went wrong");
-      }
+    } catch (error: unknown) {
+      console.error("Authentication error:", error);
+      const message = error instanceof Error ? error.message : "Something went wrong";
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -651,7 +537,14 @@ const Auth = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="password">Password</Label>
+                    {isLogin && (
+                      <Link to="/reset-password" className="text-xs text-primary hover:underline">
+                        Forgot password?
+                      </Link>
+                    )}
+                  </div>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                     <Input

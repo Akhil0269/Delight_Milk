@@ -209,7 +209,7 @@ BEGIN
     END IF;
 
     -- 2. Lock Order Row FOR UPDATE
-    SELECT id, user_id, total_amount, quantity, price_per_unit, payment_method, payment_status, status
+    SELECT id, user_id, total_amount, quantity, price_per_unit, payment_method, payment_status, status, delivery_id
     INTO v_order
     FROM public.orders
     WHERE id = p_order_id
@@ -304,6 +304,13 @@ BEGIN
             updated_at = now()
         WHERE id = p_order_id;
     END IF;
+
+    -- Cancel upcoming or in-flight delivery if associated (preserves historical delivered records)
+    UPDATE public.deliveries
+    SET status = 'cancelled',
+        updated_at = now()
+    WHERE (order_id = p_order_id OR id = v_order.delivery_id)
+      AND status IN ('upcoming', 'in_progress');
 
     RETURN jsonb_build_object(
         'success', true,

@@ -13,8 +13,8 @@ const CustomerCalendar = () => {
     const navigate = useNavigate();
     const { data: users, isLoading } = useAdminUsers();
 
-    // Find the specific user
-    const customer = users?.find((user) => user.id === userId);
+    // Find the specific user by either profile ID or auth user ID
+    const customer = users?.find((user) => user.id === userId || user.user_id === userId);
 
     if (isLoading) {
         return (
@@ -79,7 +79,7 @@ const CustomerCalendar = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="flex items-center gap-2 text-sm">
                                 <Mail className="w-4 h-4 text-muted-foreground" />
-                                <span>{(customer as any).email || "N/A"}</span>
+                                <span>{customer.email || "N/A"}</span>
                             </div>
                             <div className="flex items-center gap-2 text-sm">
                                 <Phone className="w-4 h-4 text-muted-foreground" />
@@ -87,17 +87,17 @@ const CustomerCalendar = () => {
                             </div>
                             <div className="flex items-center gap-2 text-sm col-span-full">
                                 <MapPin className="w-4 h-4 text-muted-foreground" />
-                                <span>{(customer as any).address || "No address provided"}</span>
+                                <span>{customer.address || "No address provided"}</span>
                             </div>
                         </div>
                     </div>
 
                     <div className="flex flex-col gap-2">
-                        <Badge variant={(customer as any).is_blocked ? "destructive" : "default"}>
-                            {(customer as any).is_blocked ? "Blocked" : "Active"}
+                        <Badge variant={customer.is_blocked ? "destructive" : "default"}>
+                            {customer.is_blocked ? "Blocked" : "Active"}
                         </Badge>
                         <Badge variant="secondary">
-                            {(customer as any).role || "customer"}
+                            {customer.role || "customer"}
                         </Badge>
                     </div>
                 </div>
@@ -112,7 +112,7 @@ const CustomerCalendar = () => {
                 </div>
 
                 <AdminDeliveryCalendar
-                    customerId={customer.id}
+                    customerId={customer.user_id || customer.id}
                     customerName={customer.full_name || "Customer"}
                 />
             </Card>
